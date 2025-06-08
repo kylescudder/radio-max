@@ -1,52 +1,59 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const cors = require('cors');
 
 const app = express();
-const PORT = 3000;
-const MP3_FILE_PATH = './max-verstappen.mp3'; // Replace with your MP3 file path
+const PORT = 8080;
+const AUDIO_DIR = './audio';
 
-app.get('/stream', (req, res) => {
-  const filePath = path.resolve(MP3_FILE_PATH);
-  
-  // Check if file exists
+app.use(cors());
+
+// Stream MP3 files
+app.get('/stream/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(AUDIO_DIR, filename);
+
   if (!fs.existsSync(filePath)) {
-    return res.status(404).send('Audio file not found');
+    return res.status(404).send('File not found');
   }
 
   const stat = fs.statSync(filePath);
-  const fileSize = stat.size;
-  const range = req.headers.range;
-
-  if (range) {
-    // Handle range requests for seeking
-    const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-    const chunksize = end - start + 1;
-    
-    const file = fs.createReadStream(filePath, { start, end });
-    
-    res.writeHead(206, {
-      'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-      'Accept-Ranges': 'bytes',
-      'Content-Length': chunksize,
-      'Content-Type': 'audio/mpeg',
-    });
-    
-    file.pipe(res);
-  } else {
-    // Serve the entire file
-    res.writeHead(200, {
-      'Content-Length': fileSize,
-      'Content-Type': 'audio/mpeg',
-      'Accept-Ranges': 'bytes',
-    });
-    
-    fs.createReadStream(filePath).pipe(res);
-  }
+  
+  res.setHeader('Content-Type', 'audio/mpeg');
+  res.setHeader('Content-Length', stat.size);
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('icy-name', `ETS2 Radio - ${filename}`);
+  
+  const readStream = fs.createReadStream(filePath);
+  readStream.pipe(res);
 });
 
+// List available files
+app.get('/files', (req, res) => {
+  if (!fs.existsSync(AUDIO_DIR)) {
+    return res.json({ files: [] });
+  }
+  
+  const files = fs.readdirSync(AUDIO_DIR)
+    .filter(file => file.endsWith('.mp3'))
+    .map(file => ({
+      name: file,
+      url: `http://localhost:${PORT}/stream/${file}`
+    }));
+  
+  res.json({ files });
+});
+
+// Create audio directory if it doesn't exist
+if (!fs.existsSync(AUDIO_DIR)) {
+  fs.mkdirSync(AUDIO_DIR, { recursive: true });
+  console.log(`Created ${AUDIO_DIR} directory`);
+}
+
 app.listen(PORT, () => {
-  console.log(`MP3 stream server running at http://localhost:${PORT}/stream`);
+  console.log(`🎵 Simple MP3 Server running on port ${PORT}`);
+  console.log(`📁 Place your MP3 files in: ${AUDIO_DIR}`);
+  console.log(`🎧 Stream URLs: http://localhost:${PORT}/stream/[filename.mp3]`);
+  console.log(`📋 File list: http://localhost:${PORT}/files`);
 });
