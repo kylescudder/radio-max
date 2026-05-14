@@ -2,7 +2,7 @@
   "bitrateKbps": 128,
   "sampleRateHz": 44100,
   "icyMetaInt": 16000,
-  "publicUrl": "http://radio-max.kylescudder.co.uk",
+  "publicUrl": "http://api.radio-max.kylescudder.co.uk",
   "stations": [
     {
       "id": "main",
