@@ -130,7 +130,7 @@ summary {
 }
 
 pre {
-  margin: 0.5rem 0 0;
+  margin: 0;
   padding: 0.6rem 0.75rem;
   background: var(--panel-2);
   border-radius: 6px;
@@ -139,3 +139,29 @@ pre {
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+.station__ets2-row {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.station__ets2-row pre { flex: 1; min-width: 0; }
+
+.station__copy {
+  flex: 0 0 auto;
+  padding: 0 0.75rem;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.station__copy:hover { border-color: var(--accent); }
+.station__copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.station__copy.is-copied { color: var(--good); border-color: var(--good); }
