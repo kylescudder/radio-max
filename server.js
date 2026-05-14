@@ -150,7 +150,7 @@ class RadioStation {
       'icy-notice2: Streaming for Euro Truck Simulator 2',
       `icy-name: ${this.name}`,
       'icy-genre: Gaming Music',
-      'icy-url: https://radio-max.kylescudder.co.uk',
+      'icy-url: http://radio-max.kylescudder.co.uk',
       'icy-br: 128',
       'icy-sr: 44100',
       'icy-pub: 1',
@@ -300,8 +300,8 @@ app.get('/stations', (req, res) => {
     return {
       id,
       name: station.name,
-      url: `https://radio-max.kylescudder.co.uk/radio/${id}`,
-      ets2Format: `https://radio-max.kylescudder.co.uk/radio/${id}|${station.name}|GB|128|0|1`,
+      url: `http://radio-max.kylescudder.co.uk/radio/${id}`,
+      ets2Format: `http://radio-max.kylescudder.co.uk/radio/${id}|${station.name}|GB|128|0|1`,
       currentTrack: info.currentTrack,
       progress: info.progressPercent + '%',
       listeners: info.listeners,
@@ -418,11 +418,11 @@ initializeStations();
 
 app.listen(PORT, () => {
   console.log(`🎵 RadioMax Server running on port ${PORT}`);
-  console.log(`📻 Station info: https://radio-max.kylescudder.co.uk/stations`);
-  console.log(`👥 Client monitor: https://radio-max.kylescudder.co.uk/clients`);
-  console.log(`🧪 Test page: https://radio-max.kylescudder.co.uk/test`);
+  console.log(`📻 Station info: http://radio-max.kylescudder.co.uk/stations`);
+  console.log(`👥 Client monitor: http://radio-max.kylescudder.co.uk/clients`);
+  console.log(`🧪 Test page: http://radio-max.kylescudder.co.uk/test`);
   console.log(`\n🚛 ETS2 URL Format:`);
-  console.log(`stream_data[]: "https://radio-max.kylescudder.co.uk/radio/main|RadioMax|GB|128|0|1"`);
+  console.log(`stream_data[]: "http://radio-max.kylescudder.co.uk/radio/main|RadioMax|GB|128|0|1"`);
   console.log(`\n📡 Server will log all incoming requests...`);
 });
 
