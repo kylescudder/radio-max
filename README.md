@@ -61,7 +61,7 @@ Edit `server/stations.json`:
   "bitrateKbps": 128,
   "sampleRateHz": 44100,
   "icyMetaInt": 16000,
-  "publicUrl": "http://radio-max.kylescudder.co.uk",
+  "publicUrl": "http://api.radio-max.kylescudder.co.uk",
   "stations": [
     { "id": "main",   "name": "RadioMax",      "genre": "Gaming Music" },
     { "id": "drives", "name": "RadioMax Drives", "genre": "Rock" }
@@ -106,7 +106,7 @@ ExecStart=/root/.bun/bin/bun src/server.ts
 Restart=always
 RestartSec=2
 Environment=PORT=8080
-Environment=DASHBOARD_ORIGIN=https://radio.kylescudder.co.uk
+Environment=DASHBOARD_ORIGIN=https://radio-max.kylescudder.co.uk
 
 [Install]
 WantedBy=multi-user.target
@@ -118,24 +118,24 @@ systemctl enable --now radio-max
 journalctl -u radio-max -f
 ```
 
-### Caddyfile (dual HTTP/HTTPS, same origin)
+### Caddyfile (dual HTTP/HTTPS)
 
-ETS2 needs plain HTTP. The browser dashboard (if it lives on HTTPS) needs
-HTTPS. Caddy can listen on both for the same domain:
+ETS2 needs plain HTTP. The browser dashboard (on HTTPS) needs HTTPS. Caddy
+listens on both for the API host:
 
 ```caddy
-radio-max.kylescudder.co.uk {
+api.radio-max.kylescudder.co.uk {
     reverse_proxy localhost:8080
 }
 
-http://radio-max.kylescudder.co.uk {
+http://api.radio-max.kylescudder.co.uk {
     reverse_proxy localhost:8080
 }
 ```
 
 The HTTPS block auto-provisions a Let's Encrypt cert. ETS2 hits
-`http://radio-max.kylescudder.co.uk/radio/main`, the dashboard hits
-`https://radio-max.kylescudder.co.uk/api/ws` — same Bun process serves both.
+`http://api.radio-max.kylescudder.co.uk/radio/main`, the dashboard hits
+`https://api.radio-max.kylescudder.co.uk/api/ws` — same Bun process serves both.
 
 ## Deploying the dashboard
 
@@ -152,7 +152,7 @@ served from. If you want to point your local dashboard at a deployed radio
 server, drop a `web/.env.local`:
 
 ```
-VITE_API_ORIGIN=https://radio-max.kylescudder.co.uk
+VITE_API_ORIGIN=https://api.radio-max.kylescudder.co.uk
 ```
 
 ### Option A — Netlify (separate domain)
@@ -174,7 +174,7 @@ Configure the dashboard origin via the Netlify UI:
 **Site settings → Build & deploy → Environment → Add variable**
 
 ```
-VITE_API_ORIGIN = https://radio-max.kylescudder.co.uk
+VITE_API_ORIGIN = https://api.radio-max.kylescudder.co.uk
 ```
 
 Vite inlines this at build time, so the value is baked into the production
@@ -219,7 +219,7 @@ Leave `VITE_API_ORIGIN` unset (same-origin / relative URLs).
 Add to `Documents/Euro Truck Simulator 2/live_streams.sii`:
 
 ```
-stream_data[]: "http://radio-max.kylescudder.co.uk/radio/main|RadioMax|GB|128|0|1"
+stream_data[]: "http://api.radio-max.kylescudder.co.uk/radio/main|RadioMax|GB|128|0|1"
 ```
 
 Format: `URL|name|country|bitrate|0|1`. The dashboard's "ETS2 URL" field
