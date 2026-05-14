@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RadioMax — Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css" />
+  </head>
+  <body>
+    <header>
+      <h1>RadioMax</h1>
+      <div id="status" class="status status--connecting">connecting…</div>
+    </header>
+
+    <main id="stations" aria-live="polite"></main>
+
+    <template id="station-template">
+      <article class="station">
+        <header class="station__header">
+          <h2 class="station__name"></h2>
+          <span class="station__genre"></span>
+        </header>
+        <p class="station__track"></p>
+        <div class="station__progress"><div class="station__bar"></div></div>
+        <dl class="station__meta">
+          <div><dt>Listeners</dt><dd class="station__listeners"></dd></div>
+          <div><dt>Track</dt><dd class="station__track-idx"></dd></div>
+          <div><dt>Uptime</dt><dd class="station__uptime"></dd></div>
+        </dl>
+        <details>
+          <summary>ETS2 URL</summary>
+          <pre class="station__ets2"></pre>
+        </details>
+      </article>
+    </template>
+
+    <script src="dashboard.js"></script>
+  </body>
+</html>
