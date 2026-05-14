@@ -30,6 +30,7 @@ interface Card {
   trackIdx: HTMLElement;
   uptime: HTMLElement;
   ets2: HTMLElement;
+  copy: HTMLButtonElement;
 }
 
 const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN ?? "").trim();
@@ -71,9 +72,38 @@ function ensureCard(id: string): Card {
     trackIdx: node.querySelector(".station__track-idx")!,
     uptime: node.querySelector(".station__uptime")!,
     ets2: node.querySelector(".station__ets2")!,
+    copy: node.querySelector(".station__copy")!,
   };
+  card.copy.addEventListener("click", () => {
+    void copyToClipboard(card.ets2.textContent ?? "", card.copy);
+  });
   cards.set(id, card);
   return card;
+}
+
+async function copyToClipboard(text: string, button: HTMLButtonElement): Promise<void> {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch { /* clipboard unavailable */ }
+    ta.remove();
+  }
+  const original = button.dataset.label ?? button.textContent ?? "Copy";
+  button.dataset.label = original;
+  button.textContent = "Copied";
+  button.classList.add("is-copied");
+  window.setTimeout(() => {
+    button.textContent = original;
+    button.classList.remove("is-copied");
+  }, 1500);
 }
 
 function render(stations: StationSnapshot[]): void {
