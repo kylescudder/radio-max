@@ -6,8 +6,9 @@ with a live dashboard.
 - **Server**: Bun + TypeScript. Streams `.mp3` files from disk on a real-time
   schedule (paced to the configured bitrate), with proper `icy-metaint`
   metadata blocks injected for ICY-aware clients.
-- **Dashboard**: static HTML/CSS/JS. Connects to the server over a WebSocket
-  and re-renders only when state changes — no polling.
+- **Dashboard**: Vite + TypeScript, no framework. Connects to the server over
+  a WebSocket and re-renders only when state changes — no polling. Final
+  bundle is ~2.5 KB gzipped.
 
 ```
 server/                   Bun service (deploy to Hetzner)
@@ -17,10 +18,12 @@ server/                   Bun service (deploy to Hetzner)
 ├─ stations.json          station + bitrate config
 └─ audio/<station_id>/    .mp3 files for each station
 
-web/                      Static dashboard (deploy to Netlify)
-├─ index.html
-├─ dashboard.js
-└─ dashboard.css
+web/                      Vite app (deploy to Netlify)
+├─ src/main.ts
+├─ src/dashboard.css
+├─ index.html             Vite entry
+├─ vite.config.ts
+└─ .env.example           VITE_API_ORIGIN documentation
 ```
 
 ## Quick start (local)
@@ -136,19 +139,52 @@ The HTTPS block auto-provisions a Let's Encrypt cert. ETS2 hits
 
 ## Deploying the dashboard
 
-### Option A — Netlify (separate domain)
+### Local dev
 
-The repo includes a `netlify.toml` at the root. Connect this repo to a Netlify
-site and it will deploy the `web/` directory as a static site.
-
-Then in `web/dashboard.js`, set:
-
-```js
-const API_ORIGIN = "https://radio-max.kylescudder.co.uk";
+```bash
+cd web
+bun install
+bun run dev          # http://localhost:5173
 ```
 
-And set `DASHBOARD_ORIGIN` on the radio server to your Netlify URL so the
-WS endpoint accepts it.
+With no `VITE_API_ORIGIN` set, the dashboard talks to the same origin it's
+served from. If you want to point your local dashboard at a deployed radio
+server, drop a `web/.env.local`:
+
+```
+VITE_API_ORIGIN=https://radio-max.kylescudder.co.uk
+```
+
+### Option A — Netlify (separate domain)
+
+The repo's root `netlify.toml` tells Netlify to build the Vite app from
+`web/` and publish `web/dist/`:
+
+```toml
+[build]
+  base = "web"
+  publish = "dist"
+  command = "bun install --frozen-lockfile && bun run build"
+[build.environment]
+  BUN_VERSION = "1.3.11"
+```
+
+Configure the dashboard origin via the Netlify UI:
+
+**Site settings → Build & deploy → Environment → Add variable**
+
+```
+VITE_API_ORIGIN = https://radio-max.kylescudder.co.uk
+```
+
+Vite inlines this at build time, so the value is baked into the production
+bundle (no runtime env, no secrets — the radio server URL is public anyway).
+Trigger a redeploy whenever the env var changes.
+
+Then set `DASHBOARD_ORIGIN` on the radio server (`/etc/systemd/system/radio-max.service`)
+to the exact origin Netlify serves the dashboard from — e.g.
+`https://radio.example.netlify.app` initially, or your custom domain — so the
+WS endpoint accepts that origin and rejects others.
 
 > Browsers block `ws://` and `http://` requests from `https://` pages
 > (mixed content). The dual-listener Caddyfile above gives you HTTPS on the
@@ -156,7 +192,12 @@ WS endpoint accepts it.
 
 ### Option B — same origin, served by the radio server
 
-Simpler if you don't need to split. Tell Caddy to serve `web/` directly:
+Simpler if you don't want a second deploy target. Build the dashboard,
+then have Caddy serve `web/dist/` directly:
+
+```bash
+cd web && bun install && bun run build
+```
 
 ```caddy
 radio-max.kylescudder.co.uk {
@@ -165,13 +206,13 @@ radio-max.kylescudder.co.uk {
         reverse_proxy localhost:8080
     }
     handle {
-        root * /opt/radio-max/web
+        root * /opt/radio-max/web/dist
         file_server
     }
 }
 ```
 
-Leave `API_ORIGIN = ""` in `dashboard.js` (same-origin / relative URLs).
+Leave `VITE_API_ORIGIN` unset (same-origin / relative URLs).
 
 ## ETS2 setup
 
