@@ -1,6 +1,6 @@
 # RadioMax on Herman: preview deployment
 
-Checkout: `/Users/kyle/platform/apps/radio-max`, local branch `deploy/herman`.
+Checkout: `/Users/kyle/platform/apps/radio-max`, branch `master`.
 Source base: `cc8f78c` on `kylescudder/radio-max`'s `master` branch.
 
 The Bun container serves the built Vite dashboard, WebSocket/state API and
@@ -19,7 +19,7 @@ hostname and remote audio service remain unchanged. Browser requests use
 same-origin WebSockets; `DASHBOARD_ORIGIN` is the exact preview origin.
 
 The protected deploy receiver and `com.herman.radio-max-deploy` LaunchAgent are
-installed. The first GitHub release is being activated; consult `state/public/`
+installed. The first GitHub release passed all five jobs in run `39068980986`; consult `state/public/`
 for the exact completed acceptance and `state/deployment.json` for the retained
 image/revision. No public-audio cutover is implied by a successful preview release.
 
@@ -40,12 +40,13 @@ until public audio, dashboard WebSockets and a real ETS2 session are accepted.
 
 ## Build and private acceptance
 
-Use a unique release tag and identify uncommitted candidate code clearly:
+For a manual fallback, use a clean, committed checkout and an exact revision:
 
 ```sh
-docker build --build-arg RADIO_MAX_REVISION=cc8f78c-herman-cicd-preview \
-  -t radio-max:cc8f78c-herman-cicd-preview-20261017 .
-python3 deploy/release.py radio-max:cc8f78c-herman-cicd-preview-20261017
+release_revision="$(git rev-parse HEAD)"
+docker build --build-arg RADIO_MAX_REVISION="$release_revision" \
+  -t "radio-max:$release_revision" .
+python3 deploy/release.py "radio-max:$release_revision"
 docker compose ps
 docker compose exec -T web bun /app/deploy/verify.ts
 ```
@@ -85,7 +86,7 @@ application data; restarting resets uptime, track position and listener connecti
 
 ## CI/CD: Suggestions pattern
 
-This preparation follows the verified Suggestions thread and its current
+This deployment follows the verified Suggestions thread and its current
 `.github/workflows/release.yml` and `deploy/` implementation, adapted for this
 repository's `master` branch and streaming acceptance checks. No database or
 Clerk setup is needed for RadioMax.
@@ -135,8 +136,15 @@ Private settings are mode 0600 under ignored `secrets/` and `.env.deploy-hook`.
 The dedicated `github-radio-max-deploy` Access token expires on 17 October 2027.
 The existing `Production` GitHub environment allows only `master`, holds the
 separate Access/HMAC credentials, and uses `RADIO_MAX_BASE_URL` for the preview.
-`DEPLOY_ENABLED` controls automatic delivery. It is enabled only after endpoint
-protection and preview availability are checked.
+`DEPLOY_ENABLED=true` enables automatic delivery after verified endpoint
+protection and preview availability. The first accepted automatic image was
+`ghcr.io/kylescudder/radio-max@sha256:2734122b21336ab536650ad27889ea2f1df0d0693e9a3204c853c1f10e44098b`,
+revision `082cd2b96d047b9da912f72ab01aa56d786ee2b1`.
+
+The container build defaults `DASHBOARD_LABEL` to `Herman preview`. The small
+badge is a visible release check; Netlify builds do not set `VITE_HOSTING_LABEL`
+and keep their existing dashboard appearance. Change/clear the container label
+when the final production routing is accepted.
 
 The receiver environment needs `DEPLOY_HOOK_USER=501:20`, an absolute
 `DEPLOY_SPOOL_DIR` for this app's `deploy-spool/`, and an absolute
@@ -154,8 +162,8 @@ hostname tool and `--upstream radio-max-deploy-hook:9000 --path /hooks/radio-max
 Unauthenticated rejection, invalid-signature rejection, exact-path routing
 and the receiver/host queue must pass before enabling CD.
 The receiver's private configuration and deployment state follow the platform's
-existing encrypted NAS discovery contract; refresh and verify the backup once
-those production settings are installed.
+existing encrypted NAS discovery contract; refresh and verify the backup after
+production settings or host deployment tooling change.
 
 Choose and verify public audio ingress, then register approved dashboard/API
 routes through the platform's `scripts/hostname.py` workflow. Preserve the old DNS
@@ -166,3 +174,17 @@ GitHub success, completed host acknowledgement and the public revision against
 the exact commit/digest. Check public HTTP streaming and a real ETS2 session too.
 The preview pipeline can be accepted independently. Real public audio ingress
 and ETS2 acceptance remain deferred with the routing decision.
+
+## Completed CI/CD acceptance
+
+PR #8 is merged. The first automatic master release, run `39068980986`, passed
+all five jobs. A second real push added the container-only `Herman preview`
+badge; run `39069165762` also passed all five jobs for revision
+`bb5d3c8fdfce7b54fd3c445cdaa1b8dd7e273125` and digest
+`sha256:657e916c289c8891774f880aecaa080084cec119bd1cdcd6c3f1d3ed1063c69a`.
+The completed host acknowledgement and public revision matched, and the browser
+showed the badge with a live WebSocket and the station data. The 390px mobile
+layout had no horizontal overflow. Public GET/HEAD stream requests returned 404;
+the existing Netlify dashboard and remote radio API remained available.
+Before/after screenshots and evidence are in the platform's
+`verification/radio-max-cicd/` and `verification/radio-max-cicd.json`.
