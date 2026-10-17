@@ -7,13 +7,15 @@
   "packageRules": [
     {
       "matchManagers": [
-        "npm"
+        "npm",
+        "bun"
       ],
       "rangeStrategy": "update-lockfile"
     },
     {
       "matchManagers": [
-        "npm"
+        "npm",
+        "bun"
       ],
       "matchUpdateTypes": [
         "pin"
