@@ -34,6 +34,13 @@ interface Card {
 }
 
 const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN ?? "").trim();
+const HOSTING_LABEL = (import.meta.env.VITE_HOSTING_LABEL ?? "").trim();
+if (HOSTING_LABEL) {
+  const badge = document.createElement("span");
+  badge.className = "hosting-label";
+  badge.textContent = HOSTING_LABEL;
+  document.querySelector("body > header")?.append(badge);
+}
 
 const statusEl = document.getElementById("status")!;
 const stationsEl = document.getElementById("stations")!;

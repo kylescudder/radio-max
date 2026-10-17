@@ -35,6 +35,9 @@ h1 {
   letter-spacing: -0.01em;
 }
 
+body > header { flex-wrap: wrap; }
+.hosting-label { color: var(--muted); font-size: 0.8rem; }
+
 .status {
   font-size: 0.8rem;
   padding: 0.2rem 0.55rem;
