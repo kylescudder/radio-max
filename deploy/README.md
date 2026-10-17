@@ -1,44 +1,98 @@
-# RadioMax on Herman: preview deployment
+# RadioMax on Herman
 
 Checkout: `/Users/kyle/platform/apps/radio-max`, branch `master`.
-Source base: `cc8f78c` on `kylescudder/radio-max`'s `master` branch.
-
 The Bun container serves the built Vite dashboard, WebSocket/state API and
-continuous MP3 stream on `radio-max:8080` inside external `platform-web`.
-It uses the same non-root, read-only filesystem, no host ports, bounded logs,
-resource limits and restart policy as the other Herman apps. There is no database.
-The repository's MP3 is packaged in the image and loops without a listener;
-it is 128 kbps MPEG-1 Layer III at 48 kHz. The ICY sample-rate header now matches.
+continuous MP3 broadcaster on `radio-max:8080` inside external `platform-web`.
+It follows Herman's non-root, read-only filesystem, no host ports, bounded logs,
+resource limits and restart policy. There is no database. The packaged MP3 loops
+continuously at 128 kbps MPEG-1 Layer III, 48 kHz; the ICY headers match it.
 
-## Status and public routing
+## Public routing
 
-The preview dashboard is `https://radio-max-preview.kylescudder.co.uk`.
-Its `/radio/*` paths return 404: `STREAM_HOSTS` restricts audio to private
-`localhost`, `127.0.0.1` and `radio-max` hostnames. The actual public radio
-hostname and remote audio service remain unchanged. Browser requests use
-same-origin WebSockets; `DASHBOARD_ORIGIN` is the exact preview origin.
+The production dashboard is `https://radio-max.kylescudder.co.uk`:
+Cloudflare Tunnel → shared Herman Caddy → `radio-max:8080`.
+The dashboard uses same-origin WebSockets and its exact HTTPS origin is the
+configured `DASHBOARD_ORIGIN`. The container shows a small `Herman` badge.
+The temporary preview hostname has been removed through the platform hostname tool.
+The Netlify project remains available as a fallback, but the production DNS no
+longer points to it.
 
-The protected deploy receiver and `com.herman.radio-max-deploy` LaunchAgent are
-installed. The first GitHub release passed all five jobs in run `39068980986`; consult `state/public/`
-for the exact completed acceptance and `state/deployment.json` for the retained
-image/revision. No public-audio cutover is implied by a successful preview release.
+Public audio retains `http://api.radio-max.kylescudder.co.uk/radio/main`.
+HTTPS works on the same hostname with a valid origin certificate. The API DNS
+record is a **DNS-only** A record to `178.105.134.176`, not a Cloudflare proxy.
+Audio bypasses the shared Cloudflare CDN/Tunnel route entirely:
 
-The existing audio URL is `http://api.radio-max.kylescudder.co.uk/radio/main`.
-That remote API answers HTTP; its HTTPS handshake failed during assessment.
-The current dashboard uses that API origin. A future production deployment
-can serve the dashboard and API together at `radio-max.kylescudder.co.uk`, avoiding
-the nested API hostname's HTTPS problem. Its stream URL must still support plain
-HTTP for ETS2, without forced HTTPS redirects or interactive authentication.
+```text
+HTTP/HTTPS client
+  → existing Linux edge Caddy (ports 80/443, existing TLS certificate)
+  → unprivileged relay on localhost:8080
+  → WireGuard/Tailscale radio-max-origin.tail4a869e.ts.net:8080
+  → Herman radio-max:8080
+```
 
-Before routing continuous public audio through the shared Cloudflare route,
-resolve its suitability under the current CDN terms:
-<https://www.cloudflare.com/service-specific-terms-application-services/>.
-A dedicated public relay or another suitable ingress can forward the audio while
-the dashboard uses the existing Tunnel/Caddy path. Selecting or provisioning that
-route is deferred by Kyle's instruction. Do not cut over or remove the old services
-until public audio, dashboard WebSockets and a real ETS2 session are accepted.
+Broadcasting and station state run on Herman. The existing Linux server remains
+required for public ingress; its root Caddy configuration and systemd unit are
+unchanged. Plain HTTP is retained without redirects or login for ETS2.
+`STREAM_HOSTS=localhost,127.0.0.1,radio-max` allows only private origin hostnames
+to stream. The relay sends `Host: radio-max`; requests to `/radio/*` on the
+Cloudflare dashboard hostname return 404, including spoofed forwarded hosts.
+`PUBLIC_URL` advertises the existing public HTTP audio origin.
 
-## Build and private acceptance
+ETS2's six fields are URL, name, genre, language, bitrate and favorite:
+
+```text
+stream_data[]: "http://api.radio-max.kylescudder.co.uk/radio/main|RadioMax|Gaming Music|EN|128|1"
+```
+
+## Private origin and edge operation
+
+The dedicated Tailscale sidecar has no host ports, TUN device or Docker socket.
+It uses userspace networking as UID/GID 501:20, with a read-only filesystem,
+dropped capabilities and memory/CPU limits. Its pinned image is in
+`deploy/compose.origin.yaml`; `deploy/tailscale-serve.json` forwards TCP 8080 only
+to the private app alias. Start/recover it separately from routine image releases:
+
+```sh
+docker compose -f deploy/compose.origin.yaml config --quiet
+docker compose -f deploy/compose.origin.yaml up -d --wait --wait-timeout 90
+```
+
+The enrolled machine is `radio-max-origin` (`100.78.227.72`), not Herman's host
+Tailscale identity. Its persisted identity is under protected `secrets/tailscale/`.
+Key expiry is disabled for this server node only; authentication is still required.
+Restart persistence was verified. Restore the backed-up identity rather than
+registering a duplicate node. Keep the secret files private and never print state.
+The compose healthcheck confirms Tailscale readiness; acceptance through the edge
+also checks that the app is reachable.
+
+The edge is the existing Tailscale machine `herman` (`100.110.233.67`). Authorized
+SSH uses `/Users/kyle/.ssh/herman_old_review_ed25519` as user `kyle`. The edge
+runs Caddy's unprivileged relay with the source/config in `/opt/radio-max/relay/`:
+
+- `Caddyfile` forwards continuously with `flush_interval -1`.
+- `server.ts` runs that Caddy process under the existing Bun systemd service.
+- `/opt/radio-max/server/src/server.ts` contains the same wrapper.
+- `deployment.json` records the source hashes and original service PID.
+
+To validate a relay change before installing it, copy the reviewed config/source
+to that directory and run `deploy/relay/verify.py` on the edge with Python 3. It
+starts a separate loopback listener on 18080, checks health, ICY headers, eight
+seconds of decoded audio and a WebSocket with the production dashboard origin,
+then removes its temporary files and stops the candidate. `DASHBOARD_ORIGIN` may
+be set for a staging origin. Never start a second listener on the active port.
+
+The original broadcaster source is preserved on the edge as
+`/opt/radio-max/relay/pre-herman-server.ts` (0600), and in the protected local
+`secrets/legacy-origin/pre-relay-server.tar.gz`. The original MP3 matches the
+repository's SHA-256. To restore the old broadcaster, atomically restore that
+source into the existing server working directory, then send SIGTERM to the
+verified, kyle-owned MainPID of `radio-max.service`. Its existing `Restart=always`
+policy starts the restored source. Check health and decoded audio afterward.
+No root service/config changes or sudo access are needed. This restores old
+broadcasting only; dashboard/state would need an explicit corresponding rollback.
+**Keep audio DNS-only during rollback** so audio stays off the Cloudflare CDN.
+
+## Image acceptance and rollback
 
 For a manual fallback, use a clean, committed checkout and an exact revision:
 
@@ -52,104 +106,60 @@ docker compose exec -T web bun /app/deploy/verify.ts
 ```
 
 The build installs both frozen Bun lockfiles, typechecks the server and builds
-the dashboard. The image pins the platform-tested Bun version by digest.
-The release command selects the image through ignored `.env`, waits for health,
-then checks the dashboard/assets, private-file isolation, station data, HEAD
-headers, actual stream pacing, ICY metadata framing, WebSocket origin restrictions
-and listener cleanup. Failure restores and verifies the previous image; a failed
-first installation is removed. The successful image ID and checks are recorded
-in ignored `state/deployment.json`. Source and the MP3 remain in GitHub; the NAS
-backup discovers `.env`, Compose, Dockerfile, deployment tools and state under
-the existing application discovery contract. This does not establish a completed
-NAS backup/restore test for this candidate.
+the dashboard. The release selects the image through ignored `.env`, waits for
+health, then checks dashboard/assets, private-file isolation, station data,
+HEAD headers, actual stream pacing, ICY metadata framing, WebSocket origin
+restrictions and listener cleanup. Failure restores and verifies the previous
+image; a failed first installation is removed. The previous image reference is
+in `state/deployment.json`; use `deploy/release.py <previous-image>` to roll back.
+A health-only candidate missing dashboard assets was deliberately rejected and
+the previous release/configuration/acceptance record restored during testing.
 
-Runtime `.env` settings are `STREAM_HOSTS` (an optional allowlist for HTTP Host
-values permitted to stream), `PUBLIC_URL` (the advertised ETS2 stream origin)
-and `DASHBOARD_ORIGIN` (the exact browser origin accepted for WebSockets).
-The active preview retains the existing advertised audio URL and uses the HTTPS
-preview dashboard origin. These settings are not secrets. Do not use the container's private alias in
-a production browser build.
-
-Acceptance evidence is in `state/acceptance.json`. The candidate passed its build,
-private acceptance suite and the same suite through a temporary Caddy 2.11.7 proxy.
-A deliberately broken image that passed basic health but lacked the dashboard
-was rejected, and the previous image, configuration and acceptance record were
-restored. The stream remained connected for 65 seconds through Caddy at approximately
-15.8 kB/s. Temporary test resources were removed afterward.
-
-## Rollback and stopping
-
-Retain previous image references and use `deploy/release.py <previous-image>`
-to select a prior release with acceptance checks. This project has no durable
-application data; restarting resets uptime, track position and listener connections.
-`docker compose down` stops only RadioMax and removes its private candidate container.
+Runtime `.env` settings include `STREAM_HOSTS`, `PUBLIC_URL` and
+`DASHBOARD_ORIGIN`. `secrets/before-public.env` preserves the pre-cutover settings;
+`state/original-public-dns.json` records original DNS. Restore those only as part
+of a deliberate routing rollback, not a normal image rollback. The saved original
+API record was Cloudflare-proxied and must not be restored unchanged.
+Restarting the app resets uptime, track position and listener connections.
+`docker compose down` stops only the app; the origin sidecar is a separate project.
 
 ## CI/CD: Suggestions pattern
 
-This deployment follows the verified Suggestions thread and its current
-`.github/workflows/release.yml` and `deploy/` implementation, adapted for this
-repository's `master` branch and streaming acceptance checks. No database or
-Clerk setup is needed for RadioMax.
+Every PR runs `ci.yml`: both frozen lockfiles, server/verification typechecks,
+frontend build, deployment/provenance/rollback tests, signed receiver tests,
+origin/relay config validation, then the restricted production container's actual
+stream and WebSocket acceptance. Listener cleanup is checked on an isolated
+container so unrelated production listeners cannot fail a release.
 
-Every pull request runs `ci.yml`: both frozen lockfiles, server/verification
-typechecks, frontend build, deployment/provenance/rollback tests, signed receiver
-tests, then the restricted production container's actual stream and WebSocket
-checks. Exact listener cleanup is checked on that isolated CI container so
-unrelated production listeners cannot cause a release to fail.
+Every `master` push runs `release.yml`. CI gates native AMD64/ARM64 builds, then
+an immutable GHCR manifest with GitHub build provenance is published. The mutable
+`master` tag advances only after attestation exists. `DEPLOY_ENABLED=true` enables
+CD. The GitHub `Production` environment permits only `master`, with dedicated
+`CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` and `DEPLOY_WEBHOOK_SECRET`.
+`RADIO_MAX_BASE_URL=https://radio-max.kylescudder.co.uk` supplies public acceptance.
 
-Every `master` push runs `release.yml`. CI must pass before native AMD64/ARM64
-images are built. It publishes `ghcr.io/kylescudder/radio-max` by immutable digest
-with GitHub build provenance, and updates `master` only after the attestation
-exists. Deployment runs only when `DEPLOY_ENABLED=true`.
+Cloudflare Access protects the whole `deploy-radio-max.kylescudder.co.uk` host
+with its dedicated `github-radio-max-deploy` service token (expires 17 October
+2027). Only exact path `/hooks/radio-max` reaches `radio-max-deploy-hook:9000`.
+The queue-only receiver has no Docker socket, host ports or database network.
+Its acceptance metadata mount is read-only. Unauthenticated, invalid-signature
+and incorrect-path requests are rejected.
 
-The `production` environment must permit only `master`. Its separate credentials
-are `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` and `DEPLOY_WEBHOOK_SECRET`.
-Repository variable `RADIO_MAX_BASE_URL` supplies the final HTTPS dashboard/API
-origin. GitHub receives no shell access. Like Suggestions, a read-only,
-job-lifetime registry token travels inside the signed request; Herman uses
-temporary private registry configuration, then removes it. The token is omitted
-from logs, release history and persisted request metadata.
+`com.herman.radio-max-deploy` is event-driven through launchd QueueDirectories.
+The host deployer independently requires this repository's `release.yml`,
+`refs/heads/master` and GitHub-hosted-runner provenance. It pulls the exact digest,
+checks the image revision, runs acceptance and restores/verifies the previous
+image on failure. GitHub receives no shell access. A read-only, job-lifetime
+registry token arrives in the signed request, is used in temporary private
+registry configuration and removed; it is never persisted in release metadata.
+The manual and queued release share `state/deploy.lock`.
+Routine image releases do not pull source or replace host deployment tools.
 
-Cloudflare Access must protect the entire future hostname
-`deploy-radio-max.kylescudder.co.uk` with its own `github-radio-max-deploy` service
-token. Only exact path `/hooks/radio-max` is routed to
-`radio-max-deploy-hook:9000`. `compose.deploy-hook.yaml` defines a queue-only
-receiver with no Docker socket, host ports or database network. The receiver has
-only a read-only mount of the host's public acceptance metadata.
+Herman acknowledges only completed acceptance. GitHub requires both that exact
+digest/revision acknowledgement and the public `X-Radio-Max-Revision` header
+from `/healthz`. A running container or accepted webhook alone cannot complete CD.
 
-`install-launchd.py` installs `com.herman.radio-max-deploy` using QueueDirectories,
-without polling. `herman-deploy.py` independently requires this repository's
-`release.yml`, `refs/heads/master` and GitHub-hosted-runner provenance before
-pulling an image. It verifies the requested revision, starts the candidate, runs
-the full RadioMax acceptance suite and restores/verifies the previous image on
-failure. The manual local release and queued release share `state/deploy.lock`.
-Routine image releases never `git pull` or replace host deployment tools.
-
-Herman publishes an acknowledgement only after acceptance completes. The
-workflow requires both that exact digest/revision acknowledgement and the
-public `X-Radio-Max-Revision` header from `/healthz` before it reports success.
-A merely running container or accepted webhook request cannot complete CD.
-
-## Operation and final public routing
-
-Private settings are mode 0600 under ignored `secrets/` and `.env.deploy-hook`.
-The dedicated `github-radio-max-deploy` Access token expires on 17 October 2027.
-The existing `Production` GitHub environment allows only `master`, holds the
-separate Access/HMAC credentials, and uses `RADIO_MAX_BASE_URL` for the preview.
-`DEPLOY_ENABLED=true` enables automatic delivery after verified endpoint
-protection and preview availability. The first accepted automatic image was
-`ghcr.io/kylescudder/radio-max@sha256:2734122b21336ab536650ad27889ea2f1df0d0693e9a3204c853c1f10e44098b`,
-revision `082cd2b96d047b9da912f72ab01aa56d786ee2b1`.
-
-The container build defaults `DASHBOARD_LABEL` to `Herman preview`. The small
-badge is a visible release check; Netlify builds do not set `VITE_HOSTING_LABEL`
-and keep their existing dashboard appearance. Change/clear the container label
-when the final production routing is accepted.
-
-The receiver environment needs `DEPLOY_HOOK_USER=501:20`, an absolute
-`DEPLOY_SPOOL_DIR` for this app's `deploy-spool/`, and an absolute
-`DEPLOY_WEBHOOK_SECRET_FILE` for its private HMAC secret. Create protected
-`state/public` and `deploy-spool/requests` directories before starting it.
+To reinstall the receiver/LaunchAgent from the protected existing configuration:
 
 ```sh
 docker compose -f deploy/compose.deploy-hook.yaml --env-file .env.deploy-hook config --quiet
@@ -157,34 +167,31 @@ docker compose -f deploy/compose.deploy-hook.yaml --env-file .env.deploy-hook up
 python3 -B deploy/install-launchd.py
 ```
 
-The deploy hostname was registered after Access protection using the platform
-hostname tool and `--upstream radio-max-deploy-hook:9000 --path /hooks/radio-max`.
-Unauthenticated rejection, invalid-signature rejection, exact-path routing
-and the receiver/host queue must pass before enabling CD.
-The receiver's private configuration and deployment state follow the platform's
-existing encrypted NAS discovery contract; refresh and verify the backup after
-production settings or host deployment tooling change.
+The receiver environment uses `DEPLOY_HOOK_USER=501:20`, absolute
+`DEPLOY_SPOOL_DIR` and `DEPLOY_WEBHOOK_SECRET_FILE`. Preserve protected
+`state/public` and `deploy-spool/requests` directories. Use the shared hostname
+workflow for dashboard/receiver routing changes, not manual edits to its registry.
 
-Choose and verify public audio ingress, then register approved dashboard/API
-routes through the platform's `scripts/hostname.py` workflow. Preserve the old DNS
-and services until the candidate is accepted. Before declaring the migration
-complete, repeat Suggestions' real push-to-production acceptance: make a small
-visible change, capture before/after screenshots at the same size, and verify
-GitHub success, completed host acknowledgement and the public revision against
-the exact commit/digest. Check public HTTP streaming and a real ETS2 session too.
-The preview pipeline can be accepted independently. Real public audio ingress
-and ETS2 acceptance remain deferred with the routing decision.
+## Accepted releases and recovery evidence
 
-## Completed CI/CD acceptance
-
-PR #8 is merged. The first automatic master release, run `39068980986`, passed
-all five jobs. A second real push added the container-only `Herman preview`
-badge; run `39069165762` also passed all five jobs for revision
-`bb5d3c8fdfce7b54fd3c445cdaa1b8dd7e273125` and digest
-`sha256:657e916c289c8891774f880aecaa080084cec119bd1cdcd6c3f1d3ed1063c69a`.
-The completed host acknowledgement and public revision matched, and the browser
-showed the badge with a live WebSocket and the station data. The 390px mobile
-layout had no horizontal overflow. Public GET/HEAD stream requests returned 404;
-the existing Netlify dashboard and remote radio API remained available.
-Before/after screenshots and evidence are in the platform's
+PR #8 installed the CI/CD path. Runs `39068980986` and `39069165762` completed
+all five jobs and matched host acknowledgement, immutable image and public
+revision. Before/after preview screenshots and evidence remain in the platform's
 `verification/radio-max-cicd/` and `verification/radio-max-cicd.json`.
+
+PR #9 cut production over. Run `39071085492` passed all five jobs for revision
+`295aff4df74381aaa4618e9c58677bf1a774883d` and immutable image
+`ghcr.io/kylescudder/radio-max@sha256:f13ee714b675063a4c7eeded9878e39723cd488e7a73de3be05c840a21f9aa7d`.
+It also corrects the ETS2 field order and the container's production badge.
+Current release pointers are in `state/public/deployment.json` and
+`state/deployment.json`. Public routing, decoding, browser and backup evidence
+are in the platform's `verification/radio-max-production.json` and screenshots
+under `verification/radio-max-production/`. Actual ETS2 in-game playback requires
+a game machine; protocol/decoder checks do not establish an in-game result.
+
+The encrypted NAS backup discovers `.env`, `.env.deploy-hook`, Compose,
+Dockerfile, `deploy/`, protected `secrets/` (including the Tailscale identity and
+original broadcaster archive), JSON release/routing state and verification
+artifacts. Refresh it with the shared backup script and verify its manifest plus
+selected restored-file hashes after changing routing, secrets or host tooling.
+The decryption identity remains outside its own archive.

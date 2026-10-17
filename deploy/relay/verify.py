@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run on the edge host: test the relay on a spare loopback port before cutover."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -42,13 +43,14 @@ with tempfile.TemporaryDirectory(prefix="relay-check-", dir="/opt/radio-max/rela
             ], capture_output=True, text=True, timeout=30)
             if decoded.returncode:
                 raise RuntimeError("Audio decoding failed: " + decoded.stderr[-1000:])
+            origin = os.environ.get("DASHBOARD_ORIGIN", "https://radio-max.kylescudder.co.uk")
             javascript = '''
 const ws=new WebSocket("ws://127.0.0.1:18080/api/ws",{
-  headers:{Origin:"https://radio-max-preview.kylescudder.co.uk"}});
+  headers:{Origin:ORIGIN}});
 const timer=setTimeout(()=>process.exit(1),8000);
 ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==="state"&&d.stations[0].id==="main"){
   clearTimeout(timer);ws.close();process.exit(0)}};
-'''
+'''.replace("ORIGIN", json.dumps(origin))
             subprocess.run(["/usr/local/bin/bun", "-e", javascript], check=True,
                            timeout=12, capture_output=True)
             print(json.dumps({"privateRelayHealth": True, "icyHeaders": True,
