@@ -10,6 +10,7 @@
 }
 
 http://:8080 {
+    bind 127.0.0.1 ::1
     reverse_proxy radio-max-origin.tail4a869e.ts.net:8080 {
         header_up Host radio-max
         flush_interval -1

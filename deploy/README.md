@@ -79,7 +79,9 @@ to that directory and run `deploy/relay/verify.py` on the edge with Python 3. It
 starts a separate loopback listener on 18080, checks health, ICY headers, eight
 seconds of decoded audio and a WebSocket with the production dashboard origin,
 then removes its temporary files and stops the candidate. `DASHBOARD_ORIGIN` may
-be set for a staging origin. Never start a second listener on the active port.
+be set for a staging origin; `RELAY_CONFIG` selects an uninstalled candidate file.
+The active relay binds IPv4/IPv6 loopback only. Never start a second listener on
+the active port.
 
 The original broadcaster source is preserved on the edge as
 `/opt/radio-max/relay/pre-herman-server.ts` (0600), and in the protected local

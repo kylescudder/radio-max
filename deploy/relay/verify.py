@@ -11,7 +11,8 @@ import urllib.request
 with tempfile.TemporaryDirectory(prefix="relay-check-", dir="/opt/radio-max/relay") as directory:
     directory = Path(directory)
     config = directory / "Caddyfile"
-    config.write_text(Path("/opt/radio-max/relay/Caddyfile").read_text().replace(
+    source_config = Path(os.environ.get("RELAY_CONFIG", "/opt/radio-max/relay/Caddyfile"))
+    config.write_text(source_config.read_text().replace(
         "\nhttp://:8080 {", "\nhttp://127.0.0.1:18080 {"))
     with (directory / "log").open("w") as log:
         process = subprocess.Popen([
