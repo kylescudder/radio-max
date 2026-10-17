@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/dist
+**/.env*
+state
+secrets
+deploy-spool
+deployment.json
+**/__pycache__
+*.log
