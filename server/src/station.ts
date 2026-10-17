@@ -17,6 +17,7 @@ export class Station {
   readonly id: string;
   readonly name: string;
   readonly genre: string;
+  readonly language: string;
   readonly bitrateKbps: number;
   readonly icyMetaInt: number;
   readonly publicUrl: string;
@@ -42,6 +43,7 @@ export class Station {
     this.id = config.id;
     this.name = config.name;
     this.genre = config.genre ?? "Music";
+    this.language = config.language ?? "EN";
     this.bitrateKbps = bitrateKbps;
     this.icyMetaInt = icyMetaInt;
     this.publicUrl = publicUrl;
@@ -94,7 +96,7 @@ export class Station {
       listeners: this.listeners.size,
       uptimeSec: Math.floor((Date.now() - this.startedAt) / 1000),
       streamUrl,
-      ets2Url: `${streamUrl}|${this.name}|GB|${this.bitrateKbps}|0|1`,
+      ets2Url: `${streamUrl}|${this.name}|${this.genre}|${this.language}|${this.bitrateKbps}|1`,
     };
   }
 
