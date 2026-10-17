@@ -223,10 +223,10 @@ Leave `VITE_API_ORIGIN` unset (same-origin / relative URLs).
 Add to `Documents/Euro Truck Simulator 2/live_streams.sii`:
 
 ```
-stream_data[]: "http://api.radio-max.kylescudder.co.uk/radio/main|RadioMax|GB|128|0|1"
+stream_data[]: "http://api.radio-max.kylescudder.co.uk/radio/main|RadioMax|Gaming Music|EN|128|1"
 ```
 
-Format: `URL|name|country|bitrate|0|1`. The dashboard's "ETS2 URL" field
+Format: `URL|name|genre|language|bitrate|favorite`. The dashboard's "ETS2 URL" field
 gives you the pre-formatted string.
 
 ## What changed from the old server

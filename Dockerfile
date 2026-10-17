@@ -12,7 +12,7 @@ COPY web/package.json web/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY web/src ./src
 COPY web/index.html web/tsconfig.json web/vite.config.ts ./
-ARG DASHBOARD_LABEL="Herman preview"
+ARG DASHBOARD_LABEL="Herman"
 ENV VITE_HOSTING_LABEL=${DASHBOARD_LABEL}
 RUN bun run build
 

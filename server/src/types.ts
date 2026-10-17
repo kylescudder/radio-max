@@ -2,6 +2,7 @@ export interface StationConfig {
   id: string;
   name: string;
   genre?: string;
+  language?: string;
 }
 
 export interface RootConfig {

@@ -33,6 +33,9 @@ assert.equal(state.stations.length, 1);
 assert.equal(state.stations[0].id, "main");
 assert.ok(state.stations[0].trackCount > 0);
 assert.equal(state.stations[0].trackTitle, "max verstappen");
+assert.deepEqual(state.stations[0].ets2Url.split("|"), [
+  state.stations[0].streamUrl, "RadioMax", "Gaming Music", "EN", "128", "1",
+], "ETS2 entry is URL|name|genre|language|bitrate|favorite");
 assert.equal((await get("/radio/missing")).status, 404);
 assert.equal((await get("/radio/main", { method: "POST" })).status, 405);
 const head = await get("/radio/main", { method: "HEAD" });
