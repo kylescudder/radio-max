@@ -3,6 +3,10 @@
 A small Icecast/Shoutcast-style MP3 streaming server for Euro Truck Simulator 2,
 with a live dashboard.
 
+Herman preview deployment is documented in [deploy/README.md](deploy/README.md).
+The dashboard and stream run in one restricted container; the public preview blocks audio, and
+public audio routing and the production cutover are deferred.
+
 - **Server**: Bun + TypeScript. Streams `.mp3` files from disk on a real-time
   schedule (paced to the configured bitrate), with proper `icy-metaint`
   metadata blocks injected for ICY-aware clients.

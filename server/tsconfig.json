@@ -15,5 +15,5 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts", "stations.json"]
+  "include": ["src/**/*.ts", "stations.json", "../deploy/verify.ts"]
 }
