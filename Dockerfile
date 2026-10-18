@@ -5,8 +5,10 @@ COPY server/package.json server/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY server/src ./src
 COPY server/tsconfig.json server/stations.json ./
+COPY server/test ./test
 COPY deploy/verify.ts /build/deploy/verify.ts
 RUN bun run typecheck
+RUN bun test test
 WORKDIR /build/web
 COPY web/package.json web/bun.lock ./
 RUN bun install --frozen-lockfile

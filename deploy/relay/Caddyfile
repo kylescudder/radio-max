@@ -2,8 +2,17 @@
 # The root-owned public Caddy listener and its TLS certificates stay in place.
 {
     admin off
+    persist_config off
     auto_https off
     grace_period 5s
+    servers {
+        max_header_size 16KB
+        timeouts {
+            read_header 10s
+            read_body 10s
+            idle 30s
+        }
+    }
     log default {
         level WARN
     }
@@ -11,11 +20,20 @@
 
 http://:8080 {
     bind 127.0.0.1 ::1
+    request_body {
+        max_size 1KB
+    }
+    @invalid_method not method GET HEAD OPTIONS
+    respond @invalid_method "Method not allowed" 405
     reverse_proxy radio-max-origin.tail4a869e.ts.net:8080 {
         header_up Host radio-max
-        flush_interval -1
+        header_up X-Radio-Max-Relay-Token {$RADIO_MAX_RELAY_TOKEN}
+        header_up X-Radio-Max-Client-IP {http.request.header.X-Forwarded-For}
+        unhealthy_request_count 64
         transport http {
-            dial_timeout 10s
+            dial_timeout 5s
+            response_header_timeout 10s
+            keepalive 10s
         }
     }
 }

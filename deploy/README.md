@@ -69,7 +69,8 @@ The edge is the existing Tailscale machine `herman` (`100.110.233.67`). Authoriz
 SSH uses `/Users/kyle/.ssh/herman_old_review_ed25519` as user `kyle`. The edge
 runs Caddy's unprivileged relay with the source/config in `/opt/radio-max/relay/`:
 
-- `Caddyfile` forwards continuously with `flush_interval -1`.
+- `Caddyfile` streams unknown-length responses immediately using Caddy's default
+  streaming behavior, with cancellation propagated when players disconnect.
 - `server.ts` runs that Caddy process under the existing Bun systemd service.
 - `/opt/radio-max/server/src/server.ts` contains the same wrapper.
 - `deployment.json` records the source hashes and original service PID.
@@ -93,6 +94,61 @@ policy starts the restored source. Check health and decoded audio afterward.
 No root service/config changes or sudo access are needed. This restores old
 broadcasting only; dashboard/state would need an explicit corresponding rollback.
 **Keep audio DNS-only during rollback** so audio stays off the Cloudflare CDN.
+
+## Stream admission and relay hardening
+
+Defaults are 32 simultaneous players in total, four per public IP, and a per-IP
+reconnect token bucket with 12 initial attempts and 12 replenished per minute.
+Excess per-IP requests return 429; total capacity returns 503. Both include
+`Retry-After`. Active players are not interrupted by someone else's rejected
+connection. NAT users share a public-IP quota; adjust deliberately for larger
+groups using `STREAM_MAX_LISTENERS`, `STREAM_MAX_PER_IP` and
+`STREAM_CONNECTS_PER_MINUTE`. Client bookkeeping is bounded to 4096 recent IPs;
+idle records expire after five minutes. Disconnects and server-side slow-player
+eviction return their capacity exactly once. Existing backpressure eviction stays
+in place. WebSocket clients may receive state only; inbound messages close the
+connection and payloads are bounded to 1 KiB.
+
+Production `RADIO_MAX_RELAY_TOKEN` is a generated 64-character hexadecimal secret
+in mode-0600 `.env`. A separate protected copy is
+`secrets/relay-origin-token`; the edge copy is mode-0600
+`/opt/radio-max/relay/secrets/origin-token`. Never log those values or export
+resolved Caddy/Compose configuration. The edge overwrites both its token header
+and `X-Radio-Max-Client-IP`. The existing public Caddy sanitizes `X-Forwarded-For`
+before the loopback relay uses it. Publicly supplied identity/credential headers
+cannot change the quota. The origin accepts forwarded identities only with the
+private token; non-loopback stream requests without it return 403. Container-local
+acceptance retains a loopback-only exception. An unset token supports isolated
+development/CI and trusts no forwarding headers; it is not the production setting.
+
+The RadioMax-owned relay uses the pinned upstream Caddy 2.11.7 binary under
+`/opt/radio-max/relay/bin`, installed by `deploy/relay/install-caddy.py` after
+verifying the official GitHub release-asset SHA-256. The existing shared public
+TLS front remains the Ubuntu-packaged Caddy; this work does not replace its root
+binary or change other sites. The relay binds loopback only, allows 64 active
+upstream requests, bounds headers/bodies, and has header/body/idle/upstream
+timeouts. There is no timeout imposed on a healthy audio response. Admin and
+configuration persistence are disabled, preventing autosaved secret headers.
+
+Change both token copies together and preserve the previous pair for rollback.
+Install the compatible edge config/wrapper before activating origin enforcement.
+The previous broadcaster ignores the added upstream headers, allowing a staged
+upgrade. A rollback to an image before these controls also rolls back their
+protection; repeat the live protection checks after any image rollback.
+
+`deploy/check-stream-proxy.py` tests the actual application through an isolated
+two-proxy chain, including forged headers, capacity rejection, cleanup and
+reconnection. It also checks token enforcement from a different container. CI runs
+both that case and `--public-edge` against the prepared dedicated edge config.
+`deploy/relay/verify-limits.ts` can repeat the small capacity test on an empty live
+station; it refuses to run if there are existing listeners.
+
+These controls bound application resource use. They do **not** provide upstream
+DDoS mitigation or prevent the current relay's internet link being saturated.
+The separately tested dedicated-edge config, sandboxed service unit and provider
+proposal are in `deploy/relay/PROTECTED-EDGE.md`. No billable VPS has been created.
+That phase needs provider access and an approved checkout cost; the dashboard and
+Suggestions-style image CD remain on Herman.
 
 ## Image acceptance and rollback
 

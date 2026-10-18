@@ -1,0 +1,39 @@
+[Unit]
+Description=RadioMax public audio edge
+Wants=network-online.target
+After=network-online.target tailscaled.service
+Requires=tailscaled.service
+
+[Service]
+Type=simple
+User=radio-max-edge
+Group=radio-max-edge
+Environment=XDG_DATA_HOME=/var/lib/radio-max-edge/data
+Environment=XDG_CONFIG_HOME=/var/lib/radio-max-edge/config
+EnvironmentFile=/etc/radio-max-edge/private.env
+ExecStart=/opt/radio-max/relay/bin/caddy-2.11.7 run --config /etc/radio-max-edge/Caddyfile --adapter caddyfile
+Restart=always
+RestartSec=3
+TimeoutStopSec=10
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+ReadWritePaths=/var/lib/radio-max-edge
+MemoryMax=256M
+CPUQuota=50%
+TasksMax=128
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

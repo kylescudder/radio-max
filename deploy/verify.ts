@@ -92,10 +92,15 @@ await new Promise<void>((resolve, reject) => {
       const data = JSON.parse(String(event.data));
       assert.equal(data.type, "state");
       assert.equal(data.stations[0].id, "main");
-      clearTimeout(timeout); ws.close(); resolve();
+      ws.send("unsupported client message");
     } catch (e) { clearTimeout(timeout); ws.close(); reject(e); }
   };
   ws.onerror = () => { clearTimeout(timeout); ws.close(); reject(new Error("WebSocket failed")); };
+  ws.onclose = event => {
+    clearTimeout(timeout);
+    try { assert.equal(event.code, 1008, "State feed rejects inbound application messages"); resolve(); }
+    catch (error) { reject(error); }
+  };
 });
 assert.equal((await get("/api/ws", { headers: { Origin: "https://example.invalid" } })).status, 403);
 if (exclusive) {
@@ -107,5 +112,5 @@ if (exclusive) {
   }
   assert.equal(listeners, state.stations[0].listeners);
 }
-checks.push("WebSocket snapshot and origin restriction" + (exclusive ? ", isolated listener cleanup" : ""));
+checks.push("read-only WebSocket snapshot and origin restriction" + (exclusive ? ", isolated listener cleanup" : ""));
 console.log(JSON.stringify({ passed: true, revision, checks, streamBytesPerSecond: Math.round(bytesPerSecond) }, null, 2));
