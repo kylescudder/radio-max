@@ -1,0 +1,21 @@
+# Runs inside the existing unprivileged radio-max.service on the edge host.
+# The root-owned public Caddy listener and its TLS certificates stay in place.
+{
+    admin off
+    auto_https off
+    grace_period 5s
+    log default {
+        level WARN
+    }
+}
+
+http://:8080 {
+    bind 127.0.0.1 ::1
+    reverse_proxy radio-max-origin.tail4a869e.ts.net:8080 {
+        header_up Host radio-max
+        flush_interval -1
+        transport http {
+            dial_timeout 10s
+        }
+    }
+}

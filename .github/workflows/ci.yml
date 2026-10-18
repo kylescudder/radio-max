@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Typecheck, build and package with both frozen lockfiles
+        run: docker build --build-arg RADIO_MAX_REVISION="$GITHUB_SHA" -t radio-max:ci .
+      - name: Verify deployment provenance, queue and rollback gates
+        run: python3 -B -m unittest discover -s deploy -p 'test_*.py' -v
+      - name: Verify webhook authentication and queue limits
+        run: |
+          docker run --rm -v "$PWD/deploy/receiver:/app:ro" -w /app \
+            node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 \
+            node --test server.test.mjs
+      - name: Validate private origin and public relay configuration
+        run: |
+          docker compose -f deploy/compose.origin.yaml config --quiet
+          docker run --rm -v "$PWD/deploy/relay/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2.11.7@sha256:8dc9fa87b36b25303d1c67d2a09f5824b7f3bfd72cb052f246e5da2133fe29a8 \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Verify the restricted production container and streaming API
+        run: |
+          export RADIO_MAX_IMAGE=radio-max:ci
+          export STREAM_HOSTS=localhost,127.0.0.1,radio-max
+          docker compose config --quiet
+          docker network create platform-web
+          trap 'docker compose down; docker network rm platform-web' EXIT
+          docker compose up -d --wait --wait-timeout 90
+          docker compose exec -T -e VERIFY_EXCLUSIVE=true web bun /app/deploy/verify.ts

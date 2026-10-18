@@ -1,0 +1,37 @@
+name: radio-max
+services:
+  web:
+    image: ${RADIO_MAX_IMAGE:?Set an immutable release image}
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 128
+    environment:
+      DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:-https://radio-max.kylescudder.co.uk}
+      PUBLIC_URL: ${PUBLIC_URL:-http://api.radio-max.kylescudder.co.uk}
+      STREAM_HOSTS: ${STREAM_HOSTS:-}
+    networks:
+      platform-web:
+        aliases: [radio-max]
+    healthcheck:
+      test: [CMD, bun, -e, "const r = await fetch('http://127.0.0.1:8080/healthz'); if (!r.ok || await r.text() !== 'ok') process.exit(1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+networks:
+  platform-web:
+    external: true
+    name: ${PLATFORM_WEB_NETWORK:-platform-web}

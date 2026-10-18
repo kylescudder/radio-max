@@ -1,0 +1,47 @@
+# Private Tailscale origin for the existing public audio relay. No host ports,
+# host networking, TUN device, Docker socket or database network are exposed.
+name: radio-max-origin
+services:
+  tailscale:
+    image: tailscale/tailscale:v1.102.4@sha256:2667499ed87ae29218f292556ba062918402dd5e92e93637af14867e4df12dd3
+    user: "501:20"
+    restart: unless-stopped
+    environment:
+      TS_USERSPACE: "true"
+      TS_AUTH_ONCE: "true"
+      TS_HOSTNAME: radio-max-origin
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SOCKET: /tmp/tailscaled.sock
+      TS_EXTRA_ARGS: --accept-dns=false
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_ENABLE_HEALTH_CHECK: "true"
+      TS_LOCAL_ADDR_PORT: 127.0.0.1:9002
+    volumes:
+      - ../secrets/tailscale:/var/lib/tailscale
+      - ./tailscale-serve.json:/config/serve.json:ro
+    networks:
+      web:
+        aliases: [radio-max-tail]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    healthcheck:
+      test: [CMD, wget, -qO-, http://127.0.0.1:9002/healthz]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+networks:
+  web:
+    external: true
+    name: platform-web

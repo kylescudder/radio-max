@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { Station, type Listener } from "./station.ts";
 import type { RootConfig, StationSnapshot } from "./types.ts";
 
@@ -6,8 +7,22 @@ const PORT = Number(process.env.PORT ?? 8080);
 const DASHBOARD_ORIGIN = process.env.DASHBOARD_ORIGIN ?? "*";
 const CONFIG_PATH = process.env.CONFIG_PATH ?? "stations.json";
 const AUDIO_ROOT = process.env.AUDIO_ROOT ?? "audio";
+const WEB_ROOT = process.env.WEB_ROOT;
+const REVISION = process.env.RADIO_MAX_REVISION ?? "development";
+// Limit streams to private hosts while the dashboard preview is public.
+// Caddy preserves the original Host; forwarded-host headers are not trusted.
+const STREAM_HOSTS = new Set((process.env.STREAM_HOSTS ?? "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean));
 
 const config: RootConfig = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
+if (process.env.PUBLIC_URL) config.publicUrl = process.env.PUBLIC_URL.replace(/\/$/, "");
+
+// Only serve files discovered inside the built dashboard, never arbitrary paths.
+const webFiles = new Map<string, ReturnType<typeof Bun.file>>();
+if (WEB_ROOT) {
+  for (const path of new Bun.Glob("**/*").scanSync({ cwd: WEB_ROOT, onlyFiles: true })) {
+    webFiles.set(`/${path}`, Bun.file(resolve(WEB_ROOT, path)));
+  }
+}
 
 const wsClients = new Set<Bun.ServerWebSocket<unknown>>();
 
@@ -40,6 +55,8 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
   "Vary": "Origin",
+  "Cache-Control": "no-store",
+  "X-Radio-Max-Revision": REVISION,
 };
 
 function streamHeaders(station: Station, withMeta: boolean): Record<string, string> {
@@ -63,6 +80,10 @@ function streamHeaders(station: Station, withMeta: boolean): Record<string, stri
 function handleStream(req: Request, station: Station): Response {
   const wantsMeta = req.headers.get("icy-metadata") === "1";
   let listener: Listener | null = null;
+  const disconnect = () => {
+    if (listener) station.removeListener(listener);
+    req.signal.removeEventListener("abort", disconnect);
+  };
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       listener = {
@@ -72,9 +93,11 @@ function handleStream(req: Request, station: Station): Response {
         lastMetaTitle: "",
       };
       station.addListener(listener);
+      if (req.signal.aborted) disconnect();
+      else req.signal.addEventListener("abort", disconnect, { once: true });
     },
     cancel() {
-      if (listener) station.removeListener(listener);
+      disconnect();
     },
   }, new ByteLengthQueuingStrategy({ highWaterMark: 1_000_000 }));
   return new Response(stream, { headers: streamHeaders(station, wantsMeta) });
@@ -86,6 +109,7 @@ function isAllowedOrigin(req: Request): boolean {
 }
 
 const server = Bun.serve({
+  hostname: "0.0.0.0",
   port: PORT,
   fetch(req, srv) {
     const url = new URL(req.url);
@@ -96,6 +120,9 @@ const server = Bun.serve({
     }
 
     if (path.startsWith("/radio/")) {
+      if (STREAM_HOSTS.size > 0 && !STREAM_HOSTS.has(url.hostname)) {
+        return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+      }
       const id = path.slice("/radio/".length);
       const station = stations.get(id);
       if (!station) return new Response("Station not found", { status: 404 });
@@ -103,6 +130,8 @@ const server = Bun.serve({
         return new Response(null, { headers: streamHeaders(station, false) });
       }
       if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
+      // A radio connection is intentionally long lived.
+      srv.timeout(req, 0);
       return handleStream(req, station);
     }
 
@@ -116,7 +145,19 @@ const server = Bun.serve({
       return new Response("Upgrade failed", { status: 426 });
     }
 
-    if (path === "/healthz") return new Response("ok");
+    if (path === "/healthz") return new Response("ok", {
+      headers: { "Cache-Control": "no-store", "X-Radio-Max-Revision": REVISION },
+    });
+
+    const file = webFiles.get(path === "/" ? "/index.html" : path);
+    if (file && (req.method === "GET" || req.method === "HEAD")) {
+      return new Response(req.method === "HEAD" ? null : file, { headers: {
+        "Content-Type": file.type,
+        "Cache-Control": path.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
+        "X-Content-Type-Options": "nosniff",
+        "X-Radio-Max-Revision": REVISION,
+      } });
+    }
 
     return new Response("Not found", { status: 404 });
   },
