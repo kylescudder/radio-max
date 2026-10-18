@@ -1,0 +1,45 @@
+# Dedicated protected VPS: this listener receives clients directly, not via a proxy.
+{
+    admin off
+    persist_config off
+    grace_period 5s
+    servers {
+        max_header_size 16KB
+        timeouts {
+            read_header 10s
+            read_body 10s
+            idle 30s
+        }
+    }
+    log default {
+        level WARN
+    }
+}
+
+(radio_origin) {
+    request_body {
+        max_size 1KB
+    }
+    @invalid_method not method GET HEAD OPTIONS
+    respond @invalid_method "Method not allowed" 405
+    reverse_proxy radio-max-origin.tail4a869e.ts.net:8080 {
+        header_up Host radio-max
+        header_up X-Radio-Max-Relay-Token {$RADIO_MAX_RELAY_TOKEN}
+        header_up X-Radio-Max-Client-IP {http.request.remote.host}
+        unhealthy_request_count 64
+        transport http {
+            dial_timeout 5s
+            response_header_timeout 10s
+            keepalive 10s
+        }
+    }
+}
+
+api.radio-max.kylescudder.co.uk {
+    import radio_origin
+}
+
+# ETS2's existing plain HTTP URL must not redirect to HTTPS.
+http://api.radio-max.kylescudder.co.uk {
+    import radio_origin
+}

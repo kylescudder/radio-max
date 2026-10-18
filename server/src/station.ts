@@ -11,6 +11,7 @@ export interface Listener {
   icyMetaInt: number;
   bytesSinceMeta: number;
   lastMetaTitle: string;
+  onClose?: () => void;
 }
 
 export class Station {
@@ -67,6 +68,7 @@ export class Station {
     this.tickHandle = null;
     for (const l of this.listeners) {
       try { l.controller.close(); } catch { /* already closed */ }
+      l.onClose?.();
     }
     this.listeners.clear();
   }
@@ -79,6 +81,7 @@ export class Station {
   removeListener(listener: Listener): void {
     if (!this.listeners.delete(listener)) return;
     try { listener.controller.close(); } catch { /* already closed */ }
+    listener.onClose?.();
     this.onChange();
   }
 

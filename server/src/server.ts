@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Station, type Listener } from "./station.ts";
 import type { RootConfig, StationSnapshot } from "./types.ts";
+import { positiveLimit, streamClient, StreamLimits } from "./stream-limits.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const DASHBOARD_ORIGIN = process.env.DASHBOARD_ORIGIN ?? "*";
@@ -9,7 +10,16 @@ const CONFIG_PATH = process.env.CONFIG_PATH ?? "stations.json";
 const AUDIO_ROOT = process.env.AUDIO_ROOT ?? "audio";
 const WEB_ROOT = process.env.WEB_ROOT;
 const REVISION = process.env.RADIO_MAX_REVISION ?? "development";
-// Limit streams to private hosts while the dashboard preview is public.
+const RELAY_TOKEN = process.env.RADIO_MAX_RELAY_TOKEN || undefined;
+if (RELAY_TOKEN !== undefined && !/^[a-f0-9]{64}$/i.test(RELAY_TOKEN)) {
+  throw new Error("RADIO_MAX_RELAY_TOKEN must contain 64 hexadecimal characters");
+}
+const streamLimits = new StreamLimits(
+  positiveLimit(process.env.STREAM_MAX_LISTENERS, 32),
+  positiveLimit(process.env.STREAM_MAX_PER_IP, 4),
+  positiveLimit(process.env.STREAM_CONNECTS_PER_MINUTE, 12),
+);
+// Audio is accepted only on the private origin hostnames.
 // Caddy preserves the original Host; forwarded-host headers are not trusted.
 const STREAM_HOSTS = new Set((process.env.STREAM_HOSTS ?? "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean));
 
@@ -77,12 +87,16 @@ function streamHeaders(station: Station, withMeta: boolean): Record<string, stri
   return h;
 }
 
-function handleStream(req: Request, station: Station): Response {
+function handleStream(req: Request, station: Station, release: () => void): Response {
   const wantsMeta = req.headers.get("icy-metadata") === "1";
   let listener: Listener | null = null;
+  const finish = () => {
+    release();
+    req.signal.removeEventListener("abort", disconnect);
+  };
   const disconnect = () => {
     if (listener) station.removeListener(listener);
-    req.signal.removeEventListener("abort", disconnect);
+    finish();
   };
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -91,6 +105,7 @@ function handleStream(req: Request, station: Station): Response {
         icyMetaInt: wantsMeta ? station.icyMetaInt : 0,
         bytesSinceMeta: 0,
         lastMetaTitle: "",
+        onClose: finish,
       };
       station.addListener(listener);
       if (req.signal.aborted) disconnect();
@@ -111,6 +126,7 @@ function isAllowedOrigin(req: Request): boolean {
 const server = Bun.serve({
   hostname: "0.0.0.0",
   port: PORT,
+  maxRequestBodySize: 1024,
   fetch(req, srv) {
     const url = new URL(req.url);
     const path = url.pathname;
@@ -126,13 +142,20 @@ const server = Bun.serve({
       const id = path.slice("/radio/".length);
       const station = stations.get(id);
       if (!station) return new Response("Station not found", { status: 404 });
+      const client = streamClient(req, srv.requestIP(req)?.address, RELAY_TOKEN);
+      if (client === null) return new Response("Forbidden", { status: 403 });
       if (req.method === "HEAD") {
         return new Response(null, { headers: streamHeaders(station, false) });
       }
       if (req.method !== "GET") return new Response("Method not allowed", { status: 405 });
+      const admission = streamLimits.admit(client);
+      if (!admission.ok) return new Response("Stream connection limit reached", {
+        status: admission.status,
+        headers: { "Retry-After": String(admission.retryAfter), "Cache-Control": "no-store" },
+      });
       // A radio connection is intentionally long lived.
       srv.timeout(req, 0);
-      return handleStream(req, station);
+      return handleStream(req, station, admission.release);
     }
 
     if (path === "/api/state") {
@@ -162,6 +185,7 @@ const server = Bun.serve({
     return new Response("Not found", { status: 404 });
   },
   websocket: {
+    maxPayloadLength: 1024,
     open(ws) {
       wsClients.add(ws);
       ws.send(JSON.stringify({ type: "state", stations: snapshotAll() }));
@@ -169,8 +193,8 @@ const server = Bun.serve({
     close(ws) {
       wsClients.delete(ws);
     },
-    message() {
-      // no inbound messages
+    message(ws) {
+      ws.close(1008, "Read-only state feed");
     },
   },
 });
