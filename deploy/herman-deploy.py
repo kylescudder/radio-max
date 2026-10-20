@@ -140,11 +140,25 @@ def publish_status(image, revision):
     save_json(directory / 'deployment.json', {'revision':revision, 'image':image})
 
 
+def parse_json(raw, what):
+    try:
+        return json.loads(raw)
+    except ValueError:
+        # Never echo the data: it may contain container logs or credentials.
+        raise Error(f'{what} returned unexpected output.') from None
+
+
 def inspect_current(container):
-    raw = run(['docker', 'inspect', '--format',
-               '{{json .Config.Image}}|{{json .State}}|{{json .Config.Labels}}', container])
-    image, state, labels = [json.loads(part) for part in raw.decode().strip().split('|', 2)]
-    return {'Config': {'Image': image, 'Labels': labels}, 'State': state}
+    # Parse the whole document rather than a delimited --format string: health check
+    # logs from a failed candidate contain arbitrary text, including '|' and newlines.
+    # Keep only the fields the deployer uses so nothing else is carried around.
+    info = parse_json(run(['docker', 'inspect', container]), 'docker inspect')[0]
+    state = info.get('State') or {}
+    health = state.get('Health') or {}
+    return {'Config': {'Image': (info.get('Config') or {}).get('Image'),
+                       'Labels': (info.get('Config') or {}).get('Labels') or {}},
+            'State': {'Running': bool(state.get('Running')), 'Status': state.get('Status'),
+                      'Health': {'Status': health.get('Status')}}}
 
 
 @contextmanager
@@ -178,11 +192,14 @@ def deploy(digest, requested_revision=None, registry_token=None):
         raise Error('Use an exact sha256 digest.')
     private_env(APP / '.env')
     candidate = f'{IMAGE}@{digest}'
-    ids = compose('ps', '-a', '-q', 'web').decode().strip().splitlines()
+    # compose.yaml requires the image variable, which .env lacks before the first release.
+    ids = compose('ps', '-a', '-q', 'web', image=candidate).decode().strip().splitlines()
     if len(ids) > 1:
         raise Error('Expected a single RadioMax container.')
     current = inspect_current(ids[0]) if ids else None
-    running = current['Config']['Image'] if current else None
+    # A stopped container, such as a failed first candidate, is neither the previous
+    # release to roll back to nor an already-healthy deployment.
+    running = current['Config']['Image'] if current and current['State'].get('Running') else None
     if running == candidate and current['State'].get('Health', {}).get('Status') == 'healthy':
         revision = (current['Config'].get('Labels') or {}).get('org.opencontainers.image.revision', '')
         if not REVISION.fullmatch(revision) or requested_revision and requested_revision != revision:
@@ -198,7 +215,8 @@ def deploy(digest, requested_revision=None, registry_token=None):
              '--signer-workflow', REPO + '/.github/workflows/release.yml', '--source-ref', 'refs/heads/master',
              '--deny-self-hosted-runners'], timeout=180, env=registry_env)
         run(['docker', 'pull', '--quiet', candidate], timeout=300, env=registry_env)
-    labels = json.loads(run(['docker', 'image', 'inspect', '--format', '{{json .Config.Labels}}', candidate])) or {}
+    labels = parse_json(run(['docker', 'image', 'inspect', '--format', '{{json .Config.Labels}}', candidate]),
+                        'docker image inspect') or {}
     revision = labels.get('org.opencontainers.image.revision', '')
     if not REVISION.fullmatch(revision) or requested_revision and requested_revision != revision:
         raise Error('Verified image revision does not match the request.')
