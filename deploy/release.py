@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Switch a local Herman release, restoring the previous image on failed checks."""
+"""Switch a local release on the host, restoring the previous image on failed checks."""
 import argparse
 import fcntl
 import json
@@ -31,8 +31,9 @@ def run(*args, capture=False):
 
 
 def deploy(image):
-    if run("hostname", capture=True).stdout.strip() != "herman.local" or ROOT != Path("/Users/kyle/platform/apps/radio-max"):
-        raise RuntimeError("This command is scoped to radio-max on Herman")
+    expected = os.environ.get("DEPLOY_HOSTNAME")
+    if not expected or run("hostname", capture=True).stdout.strip().split(".")[0] != expected or ROOT != Path("/Users/kyle/platform/apps/radio-max"):
+        raise RuntimeError("This command is scoped to radio-max on the host")
     state = ROOT / "state"
     state.mkdir(mode=0o700, exist_ok=True)
     with (state / "deploy.lock").open("a") as lock:

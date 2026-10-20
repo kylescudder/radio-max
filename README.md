@@ -3,7 +3,7 @@
 A small Icecast/Shoutcast-style MP3 streaming server for Euro Truck Simulator 2,
 with a live dashboard.
 
-Herman preview deployment is documented in [deploy/README.md](deploy/README.md).
+The host preview deployment is documented in [deploy/README.md](deploy/README.md).
 The dashboard and stream run in one restricted container; the public preview blocks audio, and
 public audio routing and the production cutover are deferred.
 

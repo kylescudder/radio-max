@@ -1,5 +1,5 @@
 // Entry point used by the existing radio-max.service (User=kyle). The edge
-// relays HTTP, WebSockets and ICY bytes; broadcasting happens only on Herman.
+// relays HTTP, WebSockets and ICY bytes; broadcasting happens only on the host.
 import { readFileSync } from "node:fs";
 
 const token = readFileSync("/opt/radio-max/relay/secrets/origin-token", "utf8").trim();

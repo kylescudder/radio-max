@@ -6,7 +6,7 @@ hosting account, VPS or billable resource has been created.
 The existing DNS-only relay does not provide upstream DDoS mitigation. Application
 quotas bound resource use; they cannot prevent an attack from filling that relay's
 internet link. The full solution is a dedicated provider-protected public edge.
-Herman retains the broadcaster, dashboard and existing Suggestions-style CD.
+The host retains the broadcaster, dashboard and existing Suggestions-style CD.
 
 ## Concrete candidate
 
@@ -23,7 +23,7 @@ Sources checked:
 Cloudflare Spectrum custom TCP protection requires an Enterprise plan and paid
 add-on. Re-enabling the ordinary Cloudflare web proxy would not resolve the
 previously identified audio-traffic suitability restriction.
-No accessible existing protected-hosting account was found in the Herman vault.
+No accessible existing protected-hosting account was found in the host vault.
 A provider account and an approved checkout cost are needed before provisioning.
 
 ## Prepared files
@@ -48,7 +48,7 @@ A provider account and an approved checkout cost are needed before provisioning.
    provider anti-DDoS included and a verified monthly quote. Install only an
    authorized SSH public key; keep the private key out of chat/repository.
 2. Install Tailscale through its signed Ubuntu package repository, enroll the
-   machine as `radio-max-edge`, and verify access to the Herman origin. Prefer a
+   machine as `radio-max-edge`, and verify access to the host origin. Prefer a
    narrowly scoped tailnet grant for the origin's TCP 8080. Disable key expiry for
    this server node only after enrollment; preserve authenticated private access.
 3. Create the non-login `radio-max-edge` user and `/var/lib/radio-max-edge` owned by
