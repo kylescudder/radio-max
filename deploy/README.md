@@ -24,7 +24,7 @@ continuously at 128 kbps MPEG-1 Layer III, 48 kHz; the ICY headers match it.
 
 ## Deployer
 
-`application hooks` holds this app's settings and hooks; the
+Application-specific behavior is in `hooks.py`; deployment definitions are central.
 
 ## Public routing
 
@@ -222,7 +222,7 @@ The queue-only receiver has no Docker socket, host ports or database network.
 Its acceptance metadata mount is read-only. Unauthenticated, invalid-signature
 and incorrect-path requests are rejected.
 
-`com.kylescudder.deploy-core` is event-driven through launchd QueueDirectories.
+`com.kylescudder.deploy-core` supervises independent workers for each app queue.
 The host deployer independently requires this repository's `release.yml`,
 `refs/heads/master` and GitHub-hosted-runner provenance. It pulls the exact digest,
 checks the image revision, runs acceptance and restores/verifies the previous
