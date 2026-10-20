@@ -1,4 +1,4 @@
-# Deploy webhook receiver for Herman. Run from the repository root:
+# Deploy webhook receiver for the host. Run from the repository root:
 #   docker compose -f deploy/compose.deploy-hook.yaml --env-file .env.deploy-hook up -d
 # It has no Docker socket and no database access; it only writes signed
 # requests into the spool directory consumed by the host's event-driven service,

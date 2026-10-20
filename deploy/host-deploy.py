@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""RadioMax settings and hooks for the shared host deployer (deploy_core.py)."""
+from pathlib import Path
+
+import deploy_core as core
+
+
+def accept(image):
+    core.compose('exec', '-T', 'web', 'bun', '/app/deploy/verify.ts', image=image)
+
+
+def after_success(record):
+    # Public release record read by the app's own status checks.
+    core.save_json(core.APP / 'deployment.json', {'released_at':record['deployed_at'], 'image':record['image'],
+                   'revision':record['revision'], 'previous_image':record['previous_image'],
+                   'previous_revision':record['previous_revision'], 'hostname':'radio-max.kylescudder.co.uk'})
+
+
+APP = core.App(
+    name='radio-max', title='RadioMax',
+    image='ghcr.io/kylescudder/radio-max', repo='kylescudder/radio-max',
+    image_var='RADIO_MAX_IMAGE', service='web', app_dir=Path(__file__).resolve().parents[1],
+    branch='master',
+    accept=accept,
+    after_success=after_success,
+    public_status=True,
+    require_host=True)
+
+if __name__ == '__main__':
+    core.cli(APP, __file__)

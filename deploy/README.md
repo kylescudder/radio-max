@@ -1,18 +1,25 @@
-# RadioMax on Herman
+# RadioMax on the host
 
 Checkout: `/Users/kyle/platform/apps/radio-max`, branch `master`.
 The Bun container serves the built Vite dashboard, WebSocket/state API and
 continuous MP3 broadcaster on `radio-max:8080` inside external `platform-web`.
-It follows Herman's non-root, read-only filesystem, no host ports, bounded logs,
+It follows the host's non-root, read-only filesystem, no host ports, bounded logs,
 resource limits and restart policy. There is no database. The packaged MP3 loops
 continuously at 128 kbps MPEG-1 Layer III, 48 kHz; the ICY headers match it.
+
+## Deployer
+
+`deploy/host-deploy.py` holds this app's settings and hooks; the
+shared flow is `deploy/deploy_core.py`, vendored unchanged from
+`kylescudder/deploy-core` (see `deploy/deploy_core.lock`). Change the core
+there and sync it; CI fails if the vendored copy is edited here.
 
 ## Public routing
 
 The production dashboard is `https://radio-max.kylescudder.co.uk`:
-Cloudflare Tunnel → shared Herman Caddy → `radio-max:8080`.
+Cloudflare Tunnel → shared host Caddy → `radio-max:8080`.
 The dashboard uses same-origin WebSockets and its exact HTTPS origin is the
-configured `DASHBOARD_ORIGIN`. The container shows a small `Herman` badge.
+configured `DASHBOARD_ORIGIN`. The container shows a small `the host` badge.
 The temporary preview hostname has been removed through the platform hostname tool.
 The Netlify project remains available as a fallback, but the production DNS no
 longer points to it.
@@ -27,10 +34,10 @@ HTTP/HTTPS client
   → existing Linux edge Caddy (ports 80/443, existing TLS certificate)
   → unprivileged relay on localhost:8080
   → WireGuard/Tailscale radio-max-origin.tail4a869e.ts.net:8080
-  → Herman radio-max:8080
+  → host radio-max:8080
 ```
 
-Broadcasting and station state run on Herman. The existing Linux server remains
+Broadcasting and station state run on the host. The existing Linux server remains
 required for public ingress; its root Caddy configuration and systemd unit are
 unchanged. Plain HTTP is retained without redirects or login for ETS2.
 `STREAM_HOSTS=localhost,127.0.0.1,radio-max` allows only private origin hostnames
@@ -57,7 +64,7 @@ docker compose -f deploy/compose.origin.yaml config --quiet
 docker compose -f deploy/compose.origin.yaml up -d --wait --wait-timeout 90
 ```
 
-The enrolled machine is `radio-max-origin` (`100.78.227.72`), not Herman's host
+The enrolled machine is `radio-max-origin` (`100.78.227.72`), not the host's host
 Tailscale identity. Its persisted identity is under protected `secrets/tailscale/`.
 Key expiry is disabled for this server node only; authentication is still required.
 Restart persistence was verified. Restore the backed-up identity rather than
@@ -65,7 +72,7 @@ registering a duplicate node. Keep the secret files private and never print stat
 The compose healthcheck confirms Tailscale readiness; acceptance through the edge
 also checks that the app is reachable.
 
-The edge is the existing Tailscale machine `herman` (`100.110.233.67`). Authorized
+The edge is the host's existing Tailscale machine (`100.110.233.67`). Authorized
 SSH uses `/Users/kyle/.ssh/herman_old_review_ed25519` as user `kyle`. The edge
 runs Caddy's unprivileged relay with the source/config in `/opt/radio-max/relay/`:
 
@@ -148,7 +155,7 @@ DDoS mitigation or prevent the current relay's internet link being saturated.
 The separately tested dedicated-edge config, sandboxed service unit and provider
 proposal are in `deploy/relay/PROTECTED-EDGE.md`. No billable VPS has been created.
 That phase needs provider access and an approved checkout cost; the dashboard and
-Suggestions-style image CD remain on Herman.
+Suggestions-style image CD remain on the host.
 
 ## Image acceptance and rollback
 
@@ -158,7 +165,7 @@ For a manual fallback, use a clean, committed checkout and an exact revision:
 release_revision="$(git rev-parse HEAD)"
 docker build --build-arg RADIO_MAX_REVISION="$release_revision" \
   -t "radio-max:$release_revision" .
-python3 deploy/release.py "radio-max:$release_revision"
+DEPLOY_HOSTNAME=<host name> python3 deploy/release.py "radio-max:$release_revision"
 docker compose ps
 docker compose exec -T web bun /app/deploy/verify.ts
 ```
@@ -203,7 +210,7 @@ The queue-only receiver has no Docker socket, host ports or database network.
 Its acceptance metadata mount is read-only. Unauthenticated, invalid-signature
 and incorrect-path requests are rejected.
 
-`com.herman.radio-max-deploy` is event-driven through launchd QueueDirectories.
+`com.kylescudder.radio-max-deploy` is event-driven through launchd QueueDirectories.
 The host deployer independently requires this repository's `release.yml`,
 `refs/heads/master` and GitHub-hosted-runner provenance. It pulls the exact digest,
 checks the image revision, runs acceptance and restores/verifies the previous
@@ -213,7 +220,7 @@ registry configuration and removed; it is never persisted in release metadata.
 The manual and queued release share `state/deploy.lock`.
 Routine image releases do not pull source or replace host deployment tools.
 
-Herman acknowledges only completed acceptance. GitHub requires both that exact
+The host acknowledges only completed acceptance. GitHub requires both that exact
 digest/revision acknowledgement and the public `X-Radio-Max-Revision` header
 from `/healthz`. A running container or accepted webhook alone cannot complete CD.
 
@@ -222,7 +229,7 @@ To reinstall the receiver/LaunchAgent from the protected existing configuration:
 ```sh
 docker compose -f deploy/compose.deploy-hook.yaml --env-file .env.deploy-hook config --quiet
 docker compose -f deploy/compose.deploy-hook.yaml --env-file .env.deploy-hook up -d --wait
-python3 -B deploy/install-launchd.py
+python3 -B deploy/host-deploy.py --install <host LocalHostName>
 ```
 
 The receiver environment uses `DEPLOY_HOOK_USER=501:20`, absolute
