@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
-# Entry point for manual digest deploys; launchd runs host-deploy.py directly.
+# Manual deployment through the single installed service and the existing app lock.
 set -euo pipefail
-exec python3 -B "$(dirname "$0")/host-deploy.py" "$@"
+exec python3 -B /Users/kyle/platform/deploy-core/current/deploy_service.py \
+  --config /Users/kyle/platform/deploy-core/apps.json worker radio-max "$@"

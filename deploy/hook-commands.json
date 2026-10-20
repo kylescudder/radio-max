@@ -1,0 +1,25 @@
+[
+  [
+    "compose",
+    [
+      "exec",
+      "-T",
+      "web",
+      "bun",
+      "/app/deploy/verify.ts"
+    ],
+    "ghcr.io/kylescudder/radio-max@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  [
+    "save_json",
+    "{APP}/deployment.json",
+    {
+      "released_at": "test-time",
+      "image": "ghcr.io/kylescudder/radio-max@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "previous_image": "previous",
+      "previous_revision": "cccccccccccccccccccccccccccccccccccccccc",
+      "hostname": "radio-max.kylescudder.co.uk"
+    }
+  ]
+]

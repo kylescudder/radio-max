@@ -1,5 +1,20 @@
 # RadioMax on the host
 
+## Shared deployment service
+
+This app is registered as `radio-max` in the central deployment registry
+`/Users/kyle/platform/deploy-core/apps.json`. LaunchAgent
+`com.kylescudder.deploy-core` runs the single installed engine. Application hooks
+are `deploy/hooks.py`; the receiver, credentials, queues,
+state and database contracts below remain app-specific. Manual deployment uses
+`./deploy/host-deploy.sh sha256:<digest>`.
+
+Engine updates, application registration, failure inspection and service rollback
+are documented in [deploy-core](https://github.com/kylescudder/deploy-core).
+There are no vendored engine files, lock files or sync PRs. Do not install an
+app-specific LaunchAgent. Apply future engine changes once through the central service.
+
+
 Checkout: `/Users/kyle/platform/apps/radio-max`, branch `master`.
 The Bun container serves the built Vite dashboard, WebSocket/state API and
 continuous MP3 broadcaster on `radio-max:8080` inside external `platform-web`.
@@ -9,10 +24,7 @@ continuously at 128 kbps MPEG-1 Layer III, 48 kHz; the ICY headers match it.
 
 ## Deployer
 
-`deploy/host-deploy.py` holds this app's settings and hooks; the
-shared flow is `deploy/deploy_core.py`, vendored unchanged from
-`kylescudder/deploy-core` (see `deploy/deploy_core.lock`). Change the core
-there and sync it; CI fails if the vendored copy is edited here.
+Application-specific behavior is in `hooks.py`; deployment definitions are central.
 
 ## Public routing
 
@@ -210,7 +222,7 @@ The queue-only receiver has no Docker socket, host ports or database network.
 Its acceptance metadata mount is read-only. Unauthenticated, invalid-signature
 and incorrect-path requests are rejected.
 
-`com.kylescudder.radio-max-deploy` is event-driven through launchd QueueDirectories.
+`com.kylescudder.deploy-core` supervises independent workers for each app queue.
 The host deployer independently requires this repository's `release.yml`,
 `refs/heads/master` and GitHub-hosted-runner provenance. It pulls the exact digest,
 checks the image revision, runs acceptance and restores/verifies the previous
@@ -229,7 +241,6 @@ To reinstall the receiver/LaunchAgent from the protected existing configuration:
 ```sh
 docker compose -f deploy/compose.deploy-hook.yaml --env-file .env.deploy-hook config --quiet
 docker compose -f deploy/compose.deploy-hook.yaml --env-file .env.deploy-hook up -d --wait
-python3 -B deploy/host-deploy.py --install <host LocalHostName>
 ```
 
 The receiver environment uses `DEPLOY_HOOK_USER=501:20`, absolute
