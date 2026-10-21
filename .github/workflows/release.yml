@@ -1,10 +1,10 @@
-# Publishes a checked, attested image for every commit on master. GitHub holds
+# Publishes a checked, attested image for every commit on main. GitHub holds
 # only webhook/Access credentials, never shell access.
 name: Release
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -109,15 +109,15 @@ jobs:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.manifest.outputs.digest }}
           push-to-registry: true
-      # Move the master tag only after the attestation exists.
-      - name: Tag master
+      # Move the main tag only after the attestation exists.
+      - name: Tag main
         env:
           DIGEST: ${{ steps.manifest.outputs.digest }}
-        run: docker buildx imagetools create -t "$IMAGE:master" "$IMAGE@$DIGEST"
+        run: docker buildx imagetools create -t "$IMAGE:main" "$IMAGE@$DIGEST"
 
   # Asks the host to deploy the attested digest, then waits for the public site to
   # report this commit. The host verifies the attestation itself, so the webhook
-  # secret can only ever trigger a release that this workflow built from master.
+  # secret can only ever trigger a release that this workflow built from main.
   deploy:
     needs: publish
     if: vars.DEPLOY_ENABLED == 'true'

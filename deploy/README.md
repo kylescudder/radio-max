@@ -15,7 +15,7 @@ There are no vendored engine files, lock files or sync PRs. Do not install an
 app-specific LaunchAgent. Apply future engine changes once through the central service.
 
 
-Checkout: `/Users/kyle/platform/apps/radio-max`, branch `master`.
+Checkout: `/Users/kyle/platform/apps/radio-max`, branch `main`.
 The Bun container serves the built Vite dashboard, WebSocket/state API and
 continuous MP3 broadcaster on `radio-max:8080` inside external `platform-web`.
 It follows the host's non-root, read-only filesystem, no host ports, bounded logs,
@@ -208,10 +208,10 @@ origin/relay config validation, then the restricted production container's actua
 stream and WebSocket acceptance. Listener cleanup is checked on an isolated
 container so unrelated production listeners cannot fail a release.
 
-Every `master` push runs `release.yml`. CI gates native AMD64/ARM64 builds, then
+Every `main` push runs `release.yml`. CI gates native AMD64/ARM64 builds, then
 an immutable GHCR manifest with GitHub build provenance is published. The mutable
-`master` tag advances only after attestation exists. `DEPLOY_ENABLED=true` enables
-CD. The GitHub `Production` environment permits only `master`, with dedicated
+`main` tag advances only after attestation exists. `DEPLOY_ENABLED=true` enables
+CD. The GitHub `Production` environment permits only `main`, with dedicated
 `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` and `DEPLOY_WEBHOOK_SECRET`.
 `RADIO_MAX_BASE_URL=https://radio-max.kylescudder.co.uk` supplies public acceptance.
 
@@ -224,7 +224,7 @@ and incorrect-path requests are rejected.
 
 `com.kylescudder.deploy-core` supervises independent workers for each app queue.
 The host deployer independently requires this repository's `release.yml`,
-`refs/heads/master` and GitHub-hosted-runner provenance. It pulls the exact digest,
+`refs/heads/main` and GitHub-hosted-runner provenance. It pulls the exact digest,
 checks the image revision, runs acceptance and restores/verifies the previous
 image on failure. GitHub receives no shell access. A read-only, job-lifetime
 registry token arrives in the signed request, is used in temporary private
