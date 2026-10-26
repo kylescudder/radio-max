@@ -17,6 +17,7 @@ commitment, renewal price and any extras must be checked before purchase.
 At 128 kbps, the default 32-player cap is approximately 4.1 Mbps of audio payload.
 
 Sources checked:
+
 - https://www.ovhcloud.com/en-gb/vps/
 - https://developers.cloudflare.com/spectrum/
 

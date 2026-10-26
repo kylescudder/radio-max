@@ -1,0 +1,31 @@
+{
+  "name": "radio-max",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.4",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "bun run --filter radio-max-server dev",
+    "dev:web": "bun run --filter radio-max-dashboard dev",
+    "build": "bun run --filter radio-max-dashboard build",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun test server/test",
+    "test:e2e": "playwright test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.0",
+    "prettier": "3.9.10",
+    "prettier-plugin-astro": "1.1.2"
+  },
+  "lint-staged": {
+    "*": "prettier --check --ignore-unknown"
+  }
+}

@@ -14,9 +14,8 @@ are documented in [deploy-core](https://github.com/kylescudder/deploy-core).
 There are no vendored engine files, lock files or sync PRs. Do not install an
 app-specific LaunchAgent. Apply future engine changes once through the central service.
 
-
 Checkout: `/Users/kyle/platform/apps/radio-max`, branch `main`.
-The Bun container serves the built Vite dashboard, WebSocket/state API and
+The Bun container serves the built Astro dashboard, WebSocket/state API and
 continuous MP3 broadcaster on `radio-max:8080` inside external `platform-web`.
 It follows the host's non-root, read-only filesystem, no host ports, bounded logs,
 resource limits and restart policy. There is no database. The packaged MP3 loops
@@ -33,8 +32,8 @@ Cloudflare Tunnel → shared host Caddy → `radio-max:8080`.
 The dashboard uses same-origin WebSockets and its exact HTTPS origin is the
 configured `DASHBOARD_ORIGIN`. The container shows a small `the host` badge.
 The temporary preview hostname has been removed through the platform hostname tool.
-The Netlify project remains available as a fallback, but the production DNS no
-longer points to it.
+The old Netlify fallback has been retired: `netlify.toml` is gone and the
+production DNS no longer points to Netlify.
 
 Public audio retains `http://api.radio-max.kylescudder.co.uk/radio/main`.
 HTTPS works on the same hostname with a valid origin certificate. The API DNS

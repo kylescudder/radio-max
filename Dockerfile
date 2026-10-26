@@ -1,22 +1,20 @@
-ARG BUN_IMAGE=oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4
+ARG BUN_IMAGE=oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d
 FROM ${BUN_IMAGE} AS build
-WORKDIR /build/server
-COPY server/package.json server/bun.lock ./
-RUN bun install --frozen-lockfile
-COPY server/src ./src
-COPY server/tsconfig.json server/stations.json ./
-COPY server/test ./test
-COPY deploy/verify.ts /build/deploy/verify.ts
-RUN bun run typecheck
-RUN bun test test
-WORKDIR /build/web
-COPY web/package.json web/bun.lock ./
-RUN bun install --frozen-lockfile
-COPY web/src ./src
-COPY web/index.html web/tsconfig.json web/vite.config.ts ./
+WORKDIR /build
+ENV HUSKY=0 ASTRO_TELEMETRY_DISABLED=1
+COPY package.json bun.lock ./
+COPY server/package.json ./server/
+COPY web/package.json ./web/
+RUN BUN_CONFIG_MAX_HTTP_REQUESTS=16 bun install --frozen-lockfile
+COPY server/src ./server/src
+COPY server/tsconfig.json server/stations.json ./server/
+COPY server/test ./server/test
+COPY deploy/verify.ts ./deploy/verify.ts
+COPY web/src ./web/src
+COPY web/astro.config.mjs web/tsconfig.json ./web/
 ARG DASHBOARD_LABEL="Self-hosted"
-ENV VITE_HOSTING_LABEL=${DASHBOARD_LABEL}
-RUN bun run build
+ENV PUBLIC_HOSTING_LABEL=${DASHBOARD_LABEL}
+RUN bun run typecheck && bun run test && bun run build
 
 FROM ${BUN_IMAGE} AS runtime
 WORKDIR /app/server

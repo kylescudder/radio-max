@@ -10,3 +10,7 @@ secrets/
 __pycache__/
 deploy-spool/
 deployment.json
+dist/
+.astro/
+playwright-report/
+test-results/
