@@ -26,7 +26,8 @@ with tempfile.TemporaryDirectory(prefix="relay-check-", dir="/opt/radio-max/rela
                     raise RuntimeError("Candidate relay exited before readiness")
                 try:
                     response = urllib.request.urlopen("http://127.0.0.1:18080/healthz", timeout=2)
-                    if response.read() == b"ok":
+                    # Status only, so the relay works with old (text) and new (JSON) origins.
+                    if response.status == 200:
                         break
                 except OSError as error:
                     last_error = str(error)

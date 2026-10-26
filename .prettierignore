@@ -1,0 +1,16 @@
+node_modules
+dist
+coverage
+bun.lock
+secrets
+state
+backups
+deploy-spool
+# Vendored into deploy-core, which pins this file by hash
+deploy/receiver
+# Audio and Astro/Playwright output
+server/audio
+.astro
+.env*
+playwright-report
+test-results

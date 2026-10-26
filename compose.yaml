@@ -25,7 +25,13 @@ services:
       platform-web:
         aliases: [radio-max]
     healthcheck:
-      test: [CMD, bun, -e, "const r = await fetch('http://127.0.0.1:8080/healthz'); if (!r.ok || await r.text() !== 'ok') process.exit(1)"]
+      test:
+        [
+          CMD,
+          bun,
+          -e,
+          "const r = await fetch('http://127.0.0.1:8080/healthz'); if (!r.ok || (await r.json()).ok !== true) process.exit(1)"
+        ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -34,7 +40,7 @@ services:
       driver: json-file
       options:
         max-size: 10m
-        max-file: "3"
+        max-file: '3'
 networks:
   platform-web:
     external: true

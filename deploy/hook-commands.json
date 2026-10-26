@@ -1,13 +1,7 @@
 [
   [
     "compose",
-    [
-      "exec",
-      "-T",
-      "web",
-      "bun",
-      "/app/deploy/verify.ts"
-    ],
+    ["exec", "-T", "web", "bun", "/app/deploy/verify.ts"],
     "ghcr.io/kylescudder/radio-max@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   ],
   [

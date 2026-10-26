@@ -19,11 +19,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Typecheck, build and package with both frozen lockfiles
+      - name: Typecheck, build, test and check formatting
+        run: |
+          docker run --rm -e HUSKY=0 -e ASTRO_TELEMETRY_DISABLED=1 -v "$PWD:/app" -w /app oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d sh -c 'bun install --frozen-lockfile && bun run typecheck && bun run build && bun run test && bun run format:check'
+      - name: Build production image
         run: docker build --build-arg RADIO_MAX_REVISION="$GITHUB_SHA" -t radio-max:ci .
-      - name: Verify application deployment hooks (engine gates run in deploy-core)
+      - name: Test deployment hooks
         run: python3 -B -m unittest discover -s deploy -p 'test_*.py' -v
-      - name: Verify webhook authentication and queue limits
+      - name: Test webhook receiver
         run: |
           docker run --rm -v "$PWD/deploy/receiver:/app:ro" -w /app \
             node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f \

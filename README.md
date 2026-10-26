@@ -10,7 +10,7 @@ public audio routing and the production cutover are deferred.
 - **Server**: Bun + TypeScript. Streams `.mp3` files from disk on a real-time
   schedule (paced to the configured bitrate), with proper `icy-metaint`
   metadata blocks injected for ICY-aware clients.
-- **Dashboard**: Vite + TypeScript, no framework. Connects to the server over
+- **Dashboard**: Astro + TypeScript, no UI framework. Connects to the server over
   a WebSocket and re-renders only when state changes — no polling. Final
   bundle is ~2.5 KB gzipped.
 
@@ -22,18 +22,17 @@ server/                   Bun service (deploy to Hetzner)
 ├─ stations.json          station + bitrate config
 └─ audio/<station_id>/    .mp3 files for each station
 
-web/                      Vite app (deploy to Netlify)
+web/                      Astro dashboard (served by the Bun service)
 ├─ src/main.ts
 ├─ src/dashboard.css
-├─ index.html             Vite entry
-├─ vite.config.ts
-└─ .env.example           VITE_API_ORIGIN documentation
+├─ src/pages/index.astro  page markup
+├─ astro.config.mjs
+└─ .env.example           PUBLIC_API_ORIGIN documentation
 ```
 
 ## Quick start (local)
 
 ```bash
-cd server
 bun install
 bun run dev
 ```
@@ -41,12 +40,13 @@ bun run dev
 The server listens on `http://localhost:8080` and serves:
 
 - `GET /radio/<station_id>` — the MP3 stream (this is the URL you give ETS2)
-- `GET /api/state`          — JSON snapshot of all stations
-- `GET /api/ws`             — WebSocket; receives `{type:"state", stations:[…]}`
-                              on every state change (track flip, listener
-                              join/leave)
+- `GET /api/state` — JSON snapshot of all stations
+- `GET /api/ws` — WebSocket; receives `{type:"state", stations:[…]}`
+  on every state change (track flip, listener
+  join/leave)
 - `HEAD /radio/<station_id>` — ICY header probe (ETS2 issues these)
-- `GET /healthz`            — `ok`
+- `GET /healthz` — `{"ok":true,"revision":"<sha>"}`, `Cache-Control: no-store`
+  (every dashboard and health response also carries `X-Radio-Max-Revision`)
 
 Verify with curl:
 
@@ -67,7 +67,7 @@ Edit `server/stations.json`:
   "icyMetaInt": 16000,
   "publicUrl": "http://api.radio-max.kylescudder.co.uk",
   "stations": [
-    { "id": "main",   "name": "RadioMax",      "genre": "Gaming Music" },
+    { "id": "main", "name": "RadioMax", "genre": "Gaming Music" },
     { "id": "drives", "name": "RadioMax Drives", "genre": "Rock" }
   ]
 }
@@ -83,12 +83,12 @@ alphabetically and looped. Restart the server to pick up changes.
 
 ## Configuration
 
-| env var             | default          | purpose                                       |
-| ------------------- | ---------------- | --------------------------------------------- |
-| `PORT`              | `8080`           | listen port                                   |
-| `CONFIG_PATH`       | `stations.json`  | path to config file                           |
-| `AUDIO_ROOT`        | `audio`          | directory containing `<station_id>/` subdirs  |
-| `DASHBOARD_ORIGIN`  | `*`              | exact origin allowed for `/api/*` + WS, or `*` |
+| env var            | default         | purpose                                        |
+| ------------------ | --------------- | ---------------------------------------------- |
+| `PORT`             | `8080`          | listen port                                    |
+| `CONFIG_PATH`      | `stations.json` | path to config file                            |
+| `AUDIO_ROOT`       | `audio`         | directory containing `<station_id>/` subdirs   |
+| `DASHBOARD_ORIGIN` | `*`             | exact origin allowed for `/api/*` + WS, or `*` |
 
 In production, set `DASHBOARD_ORIGIN` to your dashboard URL (e.g.
 `https://radio.example.com`) so the WS endpoint rejects other origins.
@@ -143,80 +143,39 @@ The HTTPS block auto-provisions a Let's Encrypt cert. ETS2 hits
 
 ## Deploying the dashboard
 
+Production serves the dashboard from the same container as the stream (see
+[deploy/README.md](deploy/README.md)): the Bun server serves the static Astro
+build in `web/dist/` and caches fingerprinted `/_astro/` files forever.
+
 ### Local dev
 
 ```bash
-cd web
-bun install
-bun run dev          # http://localhost:5173
+bun install          # one workspace: server/ and web/
+bun run dev          # radio server on http://localhost:8080
+bun run dev:web      # dashboard on http://localhost:4321
 ```
 
-With no `VITE_API_ORIGIN` set, the dashboard talks to the same origin it's
-served from. If you want to point your local dashboard at a deployed radio
-server, drop a `web/.env.local`:
+With no `PUBLIC_API_ORIGIN` set, the dashboard talks to the same origin it's
+served from. To point the dev dashboard at a radio server, drop a
+`web/.env.local`:
 
 ```
-VITE_API_ORIGIN=https://api.radio-max.kylescudder.co.uk
+PUBLIC_API_ORIGIN=http://localhost:8080
 ```
 
-### Option A — Netlify (separate domain)
+Astro inlines `PUBLIC_*` variables at build time. `DASHBOARD_ORIGIN` on the
+radio server must match the dashboard's exact origin, or the WebSocket is
+rejected.
 
-The repo's root `netlify.toml` tells Netlify to build the Vite app from
-`web/` and publish `web/dist/`:
+## Scripts
 
-```toml
-[build]
-  base = "web"
-  publish = "dist"
-  command = "bun install --frozen-lockfile && bun run build"
-[build.environment]
-  BUN_VERSION = "1.3.11"
-```
-
-Configure the dashboard origin via the Netlify UI:
-
-**Site settings → Build & deploy → Environment → Add variable**
-
-```
-VITE_API_ORIGIN = https://api.radio-max.kylescudder.co.uk
-```
-
-Vite inlines this at build time, so the value is baked into the production
-bundle (no runtime env, no secrets — the radio server URL is public anyway).
-Trigger a redeploy whenever the env var changes.
-
-Then set `DASHBOARD_ORIGIN` on the radio server (`/etc/systemd/system/radio-max.service`)
-to the exact origin Netlify serves the dashboard from — e.g.
-`https://radio.example.netlify.app` initially, or your custom domain — so the
-WS endpoint accepts that origin and rejects others.
-
-> Browsers block `ws://` and `http://` requests from `https://` pages
-> (mixed content). The dual-listener Caddyfile above gives you HTTPS on the
-> radio server, which is what makes this setup work.
-
-### Option B — same origin, served by the radio server
-
-Simpler if you don't want a second deploy target. Build the dashboard,
-then have Caddy serve `web/dist/` directly:
-
-```bash
-cd web && bun install && bun run build
-```
-
-```caddy
-radio-max.kylescudder.co.uk {
-    @api  path /api/* /radio/* /healthz
-    handle @api {
-        reverse_proxy localhost:8080
-    }
-    handle {
-        root * /opt/radio-max/web/dist
-        file_server
-    }
-}
-```
-
-Leave `VITE_API_ORIGIN` unset (same-origin / relative URLs).
+| Script              | Purpose                                               |
+| ------------------- | ----------------------------------------------------- |
+| `bun run typecheck` | `tsc` for the server, `astro check` for the dashboard |
+| `bun run test`      | Server stream, eviction and limit tests               |
+| `bun run test:e2e`  | Playwright dashboard journey against a real server    |
+| `bun run build`     | Static dashboard in `web/dist/`                       |
+| `bun run format`    | Prettier with the house style                         |
 
 ## ETS2 setup
 

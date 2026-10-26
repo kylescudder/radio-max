@@ -8,11 +8,11 @@ name: radio-max-deploy-hook
 services:
   deploy-hook:
     image: node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f
-    command: ["node", "/app/server.mjs"]
+    command: ['node', '/app/server.mjs']
     restart: unless-stopped
-    user: "${DEPLOY_HOOK_USER:?set DEPLOY_HOOK_USER to the queue owner uid:gid}"
+    user: '${DEPLOY_HOOK_USER:?set DEPLOY_HOOK_USER to the queue owner uid:gid}'
     environment:
-      PORT: "9000"
+      PORT: '9000'
       SPOOL_DIR: /spool
       WEBHOOK_SECRET_FILE: /run/secrets/deploy_webhook_secret
       DEPLOYED_STATE_FILE: /release-state/deployment.json
@@ -33,10 +33,10 @@ services:
     healthcheck:
       test:
         [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://127.0.0.1:9000/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:9000/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
         ]
       interval: 30s
       timeout: 5s
@@ -44,8 +44,8 @@ services:
     logging:
       driver: json-file
       options:
-        max-size: "1m"
-        max-file: "2"
+        max-size: '1m'
+        max-file: '2'
 
 secrets:
   deploy_webhook_secret:

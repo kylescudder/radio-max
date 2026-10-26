@@ -10,11 +10,18 @@
   --bad: #e25555;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   background: var(--bg);
   color: var(--text);
   padding: 2rem 1.25rem 4rem;
@@ -35,8 +42,13 @@ h1 {
   letter-spacing: -0.01em;
 }
 
-body > header { flex-wrap: wrap; }
-.hosting-label { color: var(--muted); font-size: 0.8rem; }
+body > header {
+  flex-wrap: wrap;
+}
+.hosting-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
 
 .status {
   font-size: 0.8rem;
@@ -46,9 +58,15 @@ body > header { flex-wrap: wrap; }
   color: var(--muted);
 }
 
-.status--live { color: var(--good); }
-.status--connecting { color: var(--accent); }
-.status--down { color: var(--bad); }
+.status--live {
+  color: var(--good);
+}
+.status--connecting {
+  color: var(--accent);
+}
+.status--down {
+  color: var(--bad);
+}
 
 main {
   max-width: 56rem;
@@ -71,7 +89,10 @@ main {
   margin-bottom: 0.5rem;
 }
 
-.station__name { margin: 0; font-size: 1.1rem; }
+.station__name {
+  margin: 0;
+  font-size: 1.1rem;
+}
 
 .station__genre {
   color: var(--muted);
@@ -119,7 +140,10 @@ main {
   letter-spacing: 0.06em;
 }
 
-.station__meta dd { margin: 0; font-variant-numeric: tabular-nums; }
+.station__meta dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
 
 details {
   margin-top: 0.9rem;
@@ -150,7 +174,10 @@ pre {
   gap: 0.5rem;
 }
 
-.station__ets2-row pre { flex: 1; min-width: 0; }
+.station__ets2-row pre {
+  flex: 1;
+  min-width: 0;
+}
 
 .station__copy {
   flex: 0 0 auto;
@@ -162,9 +189,20 @@ pre {
   font: inherit;
   font-size: 0.8rem;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
-.station__copy:hover { border-color: var(--accent); }
-.station__copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.station__copy.is-copied { color: var(--good); border-color: var(--good); }
+.station__copy:hover {
+  border-color: var(--accent);
+}
+.station__copy:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.station__copy.is-copied {
+  color: var(--good);
+  border-color: var(--good);
+}
