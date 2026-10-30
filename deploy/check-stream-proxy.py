@@ -27,15 +27,13 @@ try:
     (ROOT / "state").mkdir(mode=0o700, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="proxy-check-", dir=ROOT / "state") as folder:
         config = Path(folder) / "Caddyfile"
-        if "--public-edge" in sys.argv:
-            text = (ROOT / "deploy/relay/Caddyfile.public").read_text().replace(
-                "    admin off\n", "    admin off\n    auto_https off\n", 1).replace(
-                "\napi.radio-max.kylescudder.co.uk {", "\nhttp://127.0.0.1:18081 {").replace(
-                "\nhttp://api.radio-max.kylescudder.co.uk {", "\nhttp://127.0.0.1:18082 {")
-        else:
-            text = (ROOT / "deploy/relay/Caddyfile").read_text() + "\n" + \
-                "http://127.0.0.1:18081 {\n reverse_proxy 127.0.0.1:8080\n}\n"
-        config.write_text(text.replace("radio-max-origin.tail4a869e.ts.net:8080", name + "-app:8080"))
+        # The real public relay, plus a front that stands in for Cloudflare and the
+        # shared host Caddy: it discards client-supplied identity and sets
+        # Cf-Connecting-IP from the connecting address, as Cloudflare does.
+        text = (ROOT / "deploy/relay/Caddyfile.herman-public").read_text() + "\n" + \
+            "http://127.0.0.1:18081 {\n reverse_proxy 127.0.0.1:8080 {\n" + \
+            "  header_up Cf-Connecting-IP {remote_host}\n }\n}\n"
+        config.write_text(text.replace("reverse_proxy radio-max:8080", "reverse_proxy " + name + "-app:8080"))
         shared = ["--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
                   "--memory", "256m", "--cpus", "0.5", "--tmpfs", "/tmp:size=64m,exec"]
         created.append(name + "-app")
@@ -50,6 +48,7 @@ try:
                 "sh", "-c", "cp /usr/bin/caddy /tmp/caddy && exec /tmp/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile")
         result = command("run", "--rm", "--network", "container:" + name + "-proxy", *shared,
                          "-e", "VERIFY_BASE_URL=http://127.0.0.1:18081",
+                         "-e", "VERIFY_STATE_URL=http://" + name + "-app:8080",
                          "-v", str(ROOT / "deploy/relay/verify-limits.ts") + ":/checks/verify-limits.ts:ro",
                          IMAGE, "bun", "/checks/verify-limits.ts", timeout=45)
         identity_check = '''
@@ -66,10 +65,9 @@ assert.equal(allowed.status,200);
                 IMAGE, "bun", "-e", identity_check, timeout=15)
         checks = json.loads(result)
         checks["privateOriginRequiresRelayToken"] = True
-        if "--public-edge" not in sys.argv:
-            acceptance = command("exec", "-e", "VERIFY_EXCLUSIVE=true", name + "-app",
-                                 "bun", "/app/deploy/verify.ts", timeout=30)
-            checks["tokenEnabledContainerAcceptance"] = json.loads(acceptance)["passed"]
+        acceptance = command("exec", "-e", "VERIFY_EXCLUSIVE=true", name + "-app",
+                             "bun", "/app/deploy/verify.ts", timeout=30)
+        checks["tokenEnabledContainerAcceptance"] = json.loads(acceptance)["passed"]
         print(json.dumps(checks))
 except Exception:
     if created:
