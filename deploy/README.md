@@ -35,83 +35,61 @@ The temporary preview hostname has been removed through the platform hostname to
 The old Netlify fallback has been retired: `netlify.toml` is gone and the
 production DNS no longer points to Netlify.
 
-Public audio retains `http://api.radio-max.kylescudder.co.uk/radio/main`.
-HTTPS works on the same hostname with a valid origin certificate. The API DNS
-record is a **DNS-only** A record to `178.105.134.176`, not a Cloudflare proxy.
-Audio bypasses the shared Cloudflare CDN/Tunnel route entirely:
+Public audio is `http://radio-max-audio.kylescudder.co.uk/radio/main`; HTTPS
+works on the same hostname. It is a one-level name so Cloudflare's free
+certificate covers it (two-level names such as `api.radio-max` are not covered).
+Plain HTTP is served without redirects or login for ETS2:
 
 ```text
 HTTP/HTTPS client
-  → existing Linux edge Caddy (ports 80/443, existing TLS certificate)
-  → unprivileged relay on localhost:8080
-  → WireGuard/Tailscale radio-max-origin.tail4a869e.ts.net:8080
-  → host radio-max:8080
+  → Cloudflare (proxied DNS) → Cloudflare Tunnel → shared host Caddy
+  → radio-max-public-relay:8080 (deploy/compose.public-relay.yaml)
+  → radio-max:8080
 ```
 
-Broadcasting and station state run on the host. The existing Linux server remains
-required for public ingress; its root Caddy configuration and systemd unit are
-unchanged. Plain HTTP is retained without redirects or login for ETS2.
+The relay is pinned Caddy 2.11.7 on `platform-web` only, with no host ports, a
+read-only filesystem and dropped capabilities. It exposes only `/radio/main` and
+`/healthz` (GET/HEAD/OPTIONS; everything else is 404/405), sends `Host: radio-max`,
+injects the origin token and passes Cloudflare's `Cf-Connecting-IP` as
+`X-Radio-Max-Client-IP`. Cloudflare rejects client-supplied `Cf-Connecting-IP`;
+a request without it reaches the origin with no identity and gets 403.
 `STREAM_HOSTS=localhost,127.0.0.1,radio-max` allows only private origin hostnames
-to stream. The relay sends `Host: radio-max`; requests to `/radio/*` on the
-Cloudflare dashboard hostname return 404, including spoofed forwarded hosts.
-`PUBLIC_URL` advertises the existing public HTTP audio origin.
+to stream, so `/radio/*` on the dashboard hostname returns 404, including spoofed
+forwarded hosts. `PUBLIC_URL` advertises the public audio origin. Start or
+recreate the relay from the checkout root:
+
+```sh
+docker compose -f deploy/compose.public-relay.yaml --env-file .env up -d --wait
+```
+
+Audio crosses Cloudflare's CDN proxy. Its CDN terms allow it to limit
+non-Enterprise zones that serve a disproportionate share of audio; this is one
+128 kbps station capped at 32 listeners. Until 30 October 2026 audio went through
+a DNS-only `api.radio-max` record and a relay on an older Linux server; that
+server, its relay and the `api.radio-max` hostname are retired.
 
 ETS2's six fields are URL, name, genre, language, bitrate and favorite:
 
 ```text
-stream_data[]: "http://api.radio-max.kylescudder.co.uk/radio/main|RadioMax|Gaming Music|EN|128|1"
+stream_data[]: "http://radio-max-audio.kylescudder.co.uk/radio/main|RadioMax|Gaming Music|EN|128|1"
 ```
 
-## Private origin and edge operation
+## Private Tailscale origin
 
-The dedicated Tailscale sidecar has no host ports, TUN device or Docker socket.
-It uses userspace networking as UID/GID 501:20, with a read-only filesystem,
-dropped capabilities and memory/CPU limits. Its pinned image is in
-`deploy/compose.origin.yaml`; `deploy/tailscale-serve.json` forwards TCP 8080 only
-to the private app alias. Start/recover it separately from routine image releases:
+`deploy/compose.origin.yaml` runs a Tailscale sidecar enrolled as
+`radio-max-origin` (`100.78.227.72`). It is not in the public audio path; it
+remains for a possible Tailscale Funnel ingress. It has no host ports, TUN device
+or Docker socket, and runs with userspace networking as UID/GID 501:20, a
+read-only filesystem, dropped capabilities and memory/CPU limits.
+`deploy/tailscale-serve.json` forwards TCP 8080 only to the private app alias.
 
 ```sh
 docker compose -f deploy/compose.origin.yaml config --quiet
 docker compose -f deploy/compose.origin.yaml up -d --wait --wait-timeout 90
 ```
 
-The enrolled machine is `radio-max-origin` (`100.78.227.72`), not the host's host
-Tailscale identity. Its persisted identity is under protected `secrets/tailscale/`.
-Key expiry is disabled for this server node only; authentication is still required.
-Restart persistence was verified. Restore the backed-up identity rather than
-registering a duplicate node. Keep the secret files private and never print state.
-The compose healthcheck confirms Tailscale readiness; acceptance through the edge
-also checks that the app is reachable.
-
-The edge is the host's existing Tailscale machine (`100.110.233.67`). Authorized
-SSH uses `/Users/kyle/.ssh/herman_old_review_ed25519` as user `kyle`. The edge
-runs Caddy's unprivileged relay with the source/config in `/opt/radio-max/relay/`:
-
-- `Caddyfile` streams unknown-length responses immediately using Caddy's default
-  streaming behavior, with cancellation propagated when players disconnect.
-- `server.ts` runs that Caddy process under the existing Bun systemd service.
-- `/opt/radio-max/server/src/server.ts` contains the same wrapper.
-- `deployment.json` records the source hashes and original service PID.
-
-To validate a relay change before installing it, copy the reviewed config/source
-to that directory and run `deploy/relay/verify.py` on the edge with Python 3. It
-starts a separate loopback listener on 18080, checks health, ICY headers, eight
-seconds of decoded audio and a WebSocket with the production dashboard origin,
-then removes its temporary files and stops the candidate. `DASHBOARD_ORIGIN` may
-be set for a staging origin; `RELAY_CONFIG` selects an uninstalled candidate file.
-The active relay binds IPv4/IPv6 loopback only. Never start a second listener on
-the active port.
-
-The original broadcaster source is preserved on the edge as
-`/opt/radio-max/relay/pre-herman-server.ts` (0600), and in the protected local
-`secrets/legacy-origin/pre-relay-server.tar.gz`. The original MP3 matches the
-repository's SHA-256. To restore the old broadcaster, atomically restore that
-source into the existing server working directory, then send SIGTERM to the
-verified, kyle-owned MainPID of `radio-max.service`. Its existing `Restart=always`
-policy starts the restored source. Check health and decoded audio afterward.
-No root service/config changes or sudo access are needed. This restores old
-broadcasting only; dashboard/state would need an explicit corresponding rollback.
-**Keep audio DNS-only during rollback** so audio stays off the Cloudflare CDN.
+Its persisted identity is under protected `secrets/tailscale/`; restore that
+rather than registering a duplicate node, and never print state.
 
 ## Stream admission and relay hardening
 
@@ -128,45 +106,30 @@ in place. WebSocket clients may receive state only; inbound messages close the
 connection and payloads are bounded to 1 KiB.
 
 Production `RADIO_MAX_RELAY_TOKEN` is a generated 64-character hexadecimal secret
-in mode-0600 `.env`. A separate protected copy is
-`secrets/relay-origin-token`; the edge copy is mode-0600
-`/opt/radio-max/relay/secrets/origin-token`. Never log those values or export
-resolved Caddy/Compose configuration. The edge overwrites both its token header
-and `X-Radio-Max-Client-IP`. The existing public Caddy sanitizes `X-Forwarded-For`
-before the loopback relay uses it. Publicly supplied identity/credential headers
-cannot change the quota. The origin accepts forwarded identities only with the
-private token; non-loopback stream requests without it return 403. Container-local
-acceptance retains a loopback-only exception. An unset token supports isolated
-development/CI and trusts no forwarding headers; it is not the production setting.
+in mode-0600 `.env`, with a protected copy in `secrets/relay-origin-token`. Change
+both together and recreate the app and relay. Never log the value or export
+resolved Caddy/Compose configuration. The relay overwrites its token header and
+`X-Radio-Max-Client-IP`, and drops `X-Forwarded-For`, so publicly supplied
+identity/credential headers cannot change the quota. The origin accepts forwarded
+identities only with the token; non-loopback stream requests without it return 403. Container-local acceptance keeps a loopback-only exception. An unset token
+supports isolated development/CI and trusts no forwarding headers; it is not the
+production setting.
 
-The RadioMax-owned relay uses the pinned upstream Caddy 2.11.7 binary under
-`/opt/radio-max/relay/bin`, installed by `deploy/relay/install-caddy.py` after
-verifying the official GitHub release-asset SHA-256. The existing shared public
-TLS front remains the Ubuntu-packaged Caddy; this work does not replace its root
-binary or change other sites. The relay binds loopback only, allows 64 active
-upstream requests, bounds headers/bodies, and has header/body/idle/upstream
-timeouts. There is no timeout imposed on a healthy audio response. Admin and
-configuration persistence are disabled, preventing autosaved secret headers.
-
-Change both token copies together and preserve the previous pair for rollback.
-Install the compatible edge config/wrapper before activating origin enforcement.
-The previous broadcaster ignores the added upstream headers, allowing a staged
-upgrade. A rollback to an image before these controls also rolls back their
+The relay bounds headers and bodies, allows 64 active upstream requests and has
+header/body/idle/upstream timeouts, but no timeout on a healthy audio response.
+Admin and configuration persistence are disabled, so secret headers are never
+autosaved. A rollback to an image before these controls also rolls back their
 protection; repeat the live protection checks after any image rollback.
 
-`deploy/check-stream-proxy.py` tests the actual application through an isolated
-two-proxy chain, including forged headers, capacity rejection, cleanup and
-reconnection. It also checks token enforcement from a different container. CI runs
-both that case and `--public-edge` against the prepared dedicated edge config.
-`deploy/relay/verify-limits.ts` can repeat the small capacity test on an empty live
-station; it refuses to run if there are existing listeners.
+`deploy/check-stream-proxy.py` (run in CI) tests the actual application behind the
+real relay config and a front that stands in for Cloudflare: forged headers,
+capacity rejection, cleanup, reconnection and token enforcement from a different
+container. `deploy/relay/verify-limits.ts` repeats the capacity test against the
+live relay (`VERIFY_BASE_URL`, with `VERIFY_STATE_URL` for listener counts); it
+refuses to run if there are existing listeners.
 
-These controls bound application resource use. They do **not** provide upstream
-DDoS mitigation or prevent the current relay's internet link being saturated.
-The separately tested dedicated-edge config, sandboxed service unit and provider
-proposal are in `deploy/relay/PROTECTED-EDGE.md`. No billable VPS has been created.
-That phase needs provider access and an approved checkout cost; the dashboard and
-Suggestions-style image CD remain on the host.
+These controls bound application resource use. Upstream DDoS mitigation comes
+from Cloudflare, within the limits of its free plan.
 
 ## Image acceptance and rollback
 
@@ -192,10 +155,7 @@ A health-only candidate missing dashboard assets was deliberately rejected and
 the previous release/configuration/acceptance record restored during testing.
 
 Runtime `.env` settings include `STREAM_HOSTS`, `PUBLIC_URL` and
-`DASHBOARD_ORIGIN`. `secrets/before-public.env` preserves the pre-cutover settings;
-`state/original-public-dns.json` records original DNS. Restore those only as part
-of a deliberate routing rollback, not a normal image rollback. The saved original
-API record was Cloudflare-proxied and must not be restored unchanged.
+`DASHBOARD_ORIGIN`. Routing changes are not part of a normal image rollback.
 Restarting the app resets uptime, track position and listener connections.
 `docker compose down` stops only the app; the origin sidecar is a separate project.
 
@@ -265,8 +225,8 @@ under `verification/radio-max-production/`. Actual ETS2 in-game playback require
 a game machine; protocol/decoder checks do not establish an in-game result.
 
 The encrypted NAS backup discovers `.env`, `.env.deploy-hook`, Compose,
-Dockerfile, `deploy/`, protected `secrets/` (including the Tailscale identity and
-original broadcaster archive), JSON release/routing state and verification
+Dockerfile, `deploy/` (including the public relay), protected `secrets/`
+(including the Tailscale identity and original broadcaster archive), JSON release/routing state and verification
 artifacts. Refresh it with the shared backup script and verify its manifest plus
 selected restored-file hashes after changing routing, secrets or host tooling.
 The decryption identity remains outside its own archive.

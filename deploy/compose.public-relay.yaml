@@ -1,0 +1,44 @@
+# Public audio ingress for radio-max-audio.kylescudder.co.uk.
+# Route: Cloudflare (proxied DNS) -> Tunnel -> shared Caddy -> this relay -> radio-max:8080.
+# Run from the checkout root: docker compose -f deploy/compose.public-relay.yaml --env-file .env up -d
+name: radio-max-public-relay
+services:
+  relay:
+    image: caddy:2.11.7@sha256:8dc9fa87b36b25303d1c67d2a09f5824b7f3bfd72cb052f246e5da2133fe29a8
+    user: '1000:1000'
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    environment:
+      RADIO_MAX_RELAY_TOKEN: ${RADIO_MAX_RELAY_TOKEN:?Production origin token is required}
+    entrypoint: [sh, -c]
+    command:
+      - cp /usr/bin/caddy /tmp/caddy && exec /tmp/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    volumes:
+      - ./relay/Caddyfile.herman-public:/etc/caddy/Caddyfile:ro
+    tmpfs:
+      - /tmp:size=64m,mode=1777,exec
+      - /config:size=1m,mode=1777
+      - /data:size=1m,mode=1777
+    networks:
+      platform-web:
+        aliases: [radio-max-public-relay]
+    healthcheck:
+      test: [CMD, wget, -qO-, http://127.0.0.1:8080/healthz]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+networks:
+  platform-web:
+    external: true
+    name: ${PLATFORM_WEB_NETWORK:-platform-web}

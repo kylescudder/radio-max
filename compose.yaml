@@ -15,7 +15,7 @@ services:
     pids_limit: 128
     environment:
       DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:-https://radio-max.kylescudder.co.uk}
-      PUBLIC_URL: ${PUBLIC_URL:-http://api.radio-max.kylescudder.co.uk}
+      PUBLIC_URL: ${PUBLIC_URL:-http://radio-max-audio.kylescudder.co.uk}
       STREAM_HOSTS: ${STREAM_HOSTS:-}
       RADIO_MAX_RELAY_TOKEN: ${RADIO_MAX_RELAY_TOKEN:-}
       STREAM_MAX_LISTENERS: ${STREAM_MAX_LISTENERS:-32}

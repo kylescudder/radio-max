@@ -1,0 +1,46 @@
+# Public audio relay behind Herman's Cloudflare Tunnel and shared Caddy.
+# Only reachable on platform-web. Cloudflare overwrites Cf-Connecting-IP, so it is
+# the trusted client identity; a missing/invalid value makes the origin return 403.
+{
+    admin off
+    persist_config off
+    auto_https off
+    grace_period 5s
+    servers {
+        max_header_size 16KB
+        timeouts {
+            read_header 10s
+            read_body 10s
+            idle 30s
+        }
+    }
+    log default {
+        level WARN
+    }
+}
+
+http://:8080 {
+    request_body {
+        max_size 1KB
+    }
+    @invalid_method not method GET HEAD OPTIONS
+    respond @invalid_method "Method not allowed" 405
+
+    @public_audio path /radio/main /healthz
+    handle @public_audio {
+        reverse_proxy radio-max:8080 {
+            header_up Host radio-max
+            header_up X-Radio-Max-Relay-Token {$RADIO_MAX_RELAY_TOKEN}
+            header_up X-Radio-Max-Client-IP {http.request.header.Cf-Connecting-IP}
+            header_up -X-Forwarded-For
+            unhealthy_request_count 64
+            flush_interval -1
+            transport http {
+                dial_timeout 5s
+                response_header_timeout 10s
+                keepalive 10s
+            }
+        }
+    }
+    respond "Not found" 404
+}

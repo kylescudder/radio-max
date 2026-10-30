@@ -1,12 +1,16 @@
 import { strict as assert } from 'node:assert'
 
 const base =
-  process.env.VERIFY_BASE_URL ?? 'http://api.radio-max.kylescudder.co.uk'
+  process.env.VERIFY_BASE_URL ?? 'http://radio-max-audio.kylescudder.co.uk'
+// The public relay exposes only audio and health; read listener counts from the
+// dashboard (or a private origin) instead.
+const stateBase =
+  process.env.VERIFY_STATE_URL ?? 'https://radio-max.kylescudder.co.uk'
 const maximum = Number(process.env.VERIFY_PER_IP ?? 4)
 const controllers: AbortController[] = []
 const getState = async () =>
   (await (
-    await fetch(base + '/api/state', {
+    await fetch(stateBase + '/api/state', {
       signal: AbortSignal.timeout(5000)
     })
   ).json()) as { stations: { listeners: number }[] }

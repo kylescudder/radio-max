@@ -3,9 +3,10 @@
 A small Icecast/Shoutcast-style MP3 streaming server for Euro Truck Simulator 2,
 with a live dashboard.
 
-The host preview deployment is documented in [deploy/README.md](deploy/README.md).
-The dashboard and stream run in one restricted container; the public preview blocks audio, and
-public audio routing and the production cutover are deferred.
+Production runs on the host and is documented in [deploy/README.md](deploy/README.md).
+The dashboard and stream run in one restricted container. The dashboard is
+`https://radio-max.kylescudder.co.uk`; public audio is
+`http://radio-max-audio.kylescudder.co.uk/radio/main` (HTTPS also works).
 
 - **Server**: Bun + TypeScript. Streams `.mp3` files from disk on a real-time
   schedule (paced to the configured bitrate), with proper `icy-metaint`
@@ -15,7 +16,7 @@ public audio routing and the production cutover are deferred.
   bundle is ~2.5 KB gzipped.
 
 ```
-server/                   Bun service (deploy to Hetzner)
+server/                   Bun service
 ├─ src/server.ts          HTTP + WS entry
 ├─ src/station.ts         per-station broadcast loop
 ├─ src/icy.ts             icy-metaint helpers
@@ -65,7 +66,7 @@ Edit `server/stations.json`:
   "bitrateKbps": 128,
   "sampleRateHz": 44100,
   "icyMetaInt": 16000,
-  "publicUrl": "http://api.radio-max.kylescudder.co.uk",
+  "publicUrl": "http://radio-max-audio.kylescudder.co.uk",
   "stations": [
     { "id": "main", "name": "RadioMax", "genre": "Gaming Music" },
     { "id": "drives", "name": "RadioMax Drives", "genre": "Rock" }
@@ -89,63 +90,23 @@ alphabetically and looped. Restart the server to pick up changes.
 | `CONFIG_PATH`      | `stations.json` | path to config file                            |
 | `AUDIO_ROOT`       | `audio`         | directory containing `<station_id>/` subdirs   |
 | `DASHBOARD_ORIGIN` | `*`             | exact origin allowed for `/api/*` + WS, or `*` |
+| `PUBLIC_URL`       | `publicUrl`     | public audio origin shown in the ETS2 entry    |
 
 In production, set `DASHBOARD_ORIGIN` to your dashboard URL (e.g.
 `https://radio.example.com`) so the WS endpoint rejects other origins.
 
-## Deploying to Hetzner
+## Deploying
 
-Build is one binary path: `bun src/server.ts`. Use a systemd unit:
-
-```ini
-# /etc/systemd/system/radio-max.service
-[Unit]
-Description=radio-max
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=/opt/radio-max/server
-ExecStart=/root/.bun/bin/bun src/server.ts
-Restart=always
-RestartSec=2
-Environment=PORT=8080
-Environment=DASHBOARD_ORIGIN=https://radio-max.kylescudder.co.uk
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-systemctl daemon-reload
-systemctl enable --now radio-max
-journalctl -u radio-max -f
-```
-
-### Caddyfile (dual HTTP/HTTPS)
-
-ETS2 needs plain HTTP. The browser dashboard (on HTTPS) needs HTTPS. Caddy
-listens on both for the API host:
-
-```caddy
-api.radio-max.kylescudder.co.uk {
-    reverse_proxy localhost:8080
-}
-
-http://api.radio-max.kylescudder.co.uk {
-    reverse_proxy localhost:8080
-}
-```
-
-The HTTPS block auto-provisions a Let's Encrypt cert. ETS2 hits
-`http://api.radio-max.kylescudder.co.uk/radio/main`, the dashboard hits
-`https://api.radio-max.kylescudder.co.uk/api/ws` — same Bun process serves both.
+The server and dashboard ship as one container image, released automatically from
+`main` to the host. Public audio reaches it through a small relay behind
+Cloudflare. See [deploy/README.md](deploy/README.md) for routing, releases and
+recovery.
 
 ## Deploying the dashboard
 
-Production serves the dashboard from the same container as the stream (see
-[deploy/README.md](deploy/README.md)): the Bun server serves the static Astro
-build in `web/dist/` and caches fingerprinted `/_astro/` files forever.
+Production serves the dashboard from the same container as the stream: the Bun
+server serves the static Astro build in `web/dist/` and caches fingerprinted
+`/_astro/` files forever.
 
 ### Local dev
 
@@ -182,7 +143,7 @@ rejected.
 Add to `Documents/Euro Truck Simulator 2/live_streams.sii`:
 
 ```
-stream_data[]: "http://api.radio-max.kylescudder.co.uk/radio/main|RadioMax|Gaming Music|EN|128|1"
+stream_data[]: "http://radio-max-audio.kylescudder.co.uk/radio/main|RadioMax|Gaming Music|EN|128|1"
 ```
 
 Format: `URL|name|genre|language|bitrate|favorite`. The dashboard's "ETS2 URL" field
